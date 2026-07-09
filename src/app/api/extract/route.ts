@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
 import { hasKey } from "@/lib/gemini";
-import { parsePdf, priorityText, findPageForSpan } from "@/lib/pdf";
 import { extractClaimsForPaper } from "@/lib/extractor";
+import { ingest, extractionInput, type StructuredDoc } from "@/lib/ingest";
 import { DEMO_PAPERS, DEMO_CLAIMS, DEMO_PAPER_BODIES } from "@/lib/demoData";
 import type { ExtractEvent, Paper, Claim } from "@/lib/types";
 
@@ -10,6 +10,22 @@ export const maxDuration = 300;
 
 const enc = new TextEncoder();
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+function sourceLabel(s: StructuredDoc["source"]): string {
+  switch (s) {
+    case "arxiv-html":
+    case "ar5iv":
+      return "Resolved · arXiv full text";
+    case "pmc-jats":
+      return "Resolved · PubMed Central";
+    case "arxiv-abstract":
+    case "openalex":
+    case "crossref":
+      return "Resolved · abstract";
+    default:
+      return "Parsed PDF";
+  }
+}
 
 function line(controller: ReadableStreamDefaultController, ev: ExtractEvent) {
   controller.enqueue(enc.encode(JSON.stringify(ev) + "\n"));
@@ -123,29 +139,26 @@ export async function POST(req: NextRequest) {
           // Space out calls to respect the key's per-minute quota.
           if (i > 0) await sleep(1800);
           try {
-            line(controller, { type: "status", message: `Parsing ${file.name}…` });
+            line(controller, { type: "status", message: `Resolving ${file.name}…` });
             const buf = await file.arrayBuffer();
-            const parsed = await parsePdf(buf, file.name);
+            // Resolve-first: pull clean structured full text (arXiv/PMC/OpenAlex)
+            // and only fall back to parsing the PDF when nothing resolves.
+            const doc = await ingest(buf, file.name);
             const paper: Paper = {
               paper_id: `paper-${i}-${crypto.randomUUID().slice(0, 6)}`,
               handle: String.fromCharCode(65 + i),
-              title: parsed.title,
+              title: doc.title || file.name.replace(/\.pdf$/i, ""),
               authors: "—",
               year: new Date().getFullYear(),
-              pages: parsed.numPages,
             };
             papers.push(paper);
             line(controller, { type: "paper", paper });
             line(controller, {
               type: "status",
-              message: process.env.OLLAMA_HOST
-                ? `Gemma 4 extracting on-device · ${paper.title}`
-                : `Gemma 4 extracting · ${paper.title}`,
+              message: `${sourceLabel(doc.source)} · Gemma 4 extracting · ${paper.title}`,
             });
 
-            // Lead with the document head (abstract/intro carry the headline
-            // numeric claims) then append results-focused windows.
-            const text = parsed.fullText.slice(0, 6000) + "\n…\n" + priorityText(parsed);
+            const text = extractionInput(doc);
             const { claims, tier: t } = await extractClaimsForPaper(
               paper.title,
               text,
@@ -153,10 +166,6 @@ export async function POST(req: NextRequest) {
             );
             tier = t;
             for (const c of claims) {
-              // Fix up page provenance against the real PDF text.
-              if (c.source_span.text) {
-                c.source_span.page = findPageForSpan(parsed, c.source_span.text);
-              }
               allClaims.push(c);
               line(controller, { type: "claim", claim: c });
               await sleep(60);
