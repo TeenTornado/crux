@@ -51,7 +51,53 @@ Four defects were visible in a live 3-paper upload (VGG/ResNet/DenseNet): 28 spa
 | `fix1` | 1 null task/metric slots | prompt requires metric + infers task; `canonDataset` maps ILSVRC(-year)→imagenet; `canonMetric` folds test/val/rate error + bare classification error→top-5; post-extraction metric/task inference fallback; edges require a value; dedup on canonical keys | **0 edges** | **1 edge** (VGG↔ResNet top-5, unit-verified); third-party & value-less claims form 0 |
 | `fix4` | 4 third-party attribution | `about_system` + `is_own_contribution` added to prompt/schema; `buildCandidateEdges` excludes non-own claims; "cited" marker in the source list | 3rd-party claims *would* edge after Fix 1 | GoogLeNet 6.7% & Clarifai 11.2%/11.7% flagged `own=false` → **0 edges** (verified on the VGG comparison paragraph); VGG's own 7.0% stays edge-eligible |
 | `fix2` | 2 LaTeX/citation artifacts | new `lib/ingest/clean.ts` (`cleanText`/`cleanDoc`) run **before chunking** in `ingest()`: collapse ar5iv `\%` triple-expansion (`6.7%percent6.76.7\%`→`6.7%`, incl. slash pairs `24.8%/7.5%`), strip `\times`/`\macro` LaTeX, strip `[41]`/`[1,2]` citations | spans carried `\%`, `percent`, `[41]` junk | fixtures re-generated: **0 backslash macros, 0 `percent` artifacts, 0 bracketed citations**; clean values survive (VGG `7.3%`, ResNet `3.57%`). Span-grounding rate unchanged — the gate is by-construction 100%, and source+extraction text are cleaned identically so no grounded claim is lost |
-| `fix3` | 3 author self-reference dups | `paperSystemName` (dominant own `about_system`, else title token) + `dedupSignature` fold `we`/`our`/`the authors'? team`/`the proposed method` → system name (order-preserving, light `-s` stem) for the value-less dedup key; **grounded `inferDataset`** fills a missing dataset from the span (ILSVRC/ImageNet/CIFAR/COCO/… only when literally present) so a bare "7.3% top-5 error" claim resolves to ImageNet and collapses with its ILSVRC-named twin | headline result duplicated as "we …" and by method name across chunks | `eval/fix3-check.ts` (12 checks): self-ref phrasings fold to one signature/key; VGG 7.3% abstract-vs-results dup collapses to a single `imagenet\|top5 error\|7.3` key; distinct values (6.8% vs 7.3%) stay separate (recall guard); `inferDataset` never invents a name absent from text |
+| `fix3` | 3 author self-reference dups | `paperSystemName` (dominant own `about_system`, else title token) + `dedupSignature` fold `we`/`our`/`the authors'? team`/`the proposed method` → system name (order-preserving, light `-s` stem) for the value-less dedup key; **grounded `inferDataset`** fills a missing dataset from the span (ILSVRC/ImageNet/CIFAR/COCO/… only when literally present) so a bare "7.3% top-5 error" claim resolves to ImageNet and collapses with its ILSVRC-named twin | headline result duplicated as "we …" and by method name across chunks | `eval/fix3-check.ts` (16 checks): self-ref phrasings fold to one signature/key; VGG 7.3% abstract-vs-results dup collapses to a single `imagenet\|top5 error\|7.3` key; distinct values (6.8% vs 7.3%) stay separate (recall guard); `inferDataset` never invents a name absent from text |
+
+### Why the fixes above weren't enough live — and the two extraction bugs behind it
+
+Running the fixes end-to-end (not just the unit tests) exposed that **`edges` was still 0**: the graph layer (Fix 1/3/4) was correct, but the *extraction* wasn't feeding it VGG's 7.3% top-5 error. Root causes, in order of discovery:
+
+1. **`gemma4:e4b` never extracts VGG's headline.** Across 6 priority chunks it fixates on the top-1 table rows (24.x) and the "secured the places" narrative and simply omits "…configuration E achieves 7.3% top-5 error". Re-runs are nondeterministic (2 claims one run, 0 the next on the *same* chunk). Gemini escalation only fires on a **fully empty** chunk, so a chunk that yields a junk number but misses the headline is never rescued; and the free-tier key was throttling escalations to empty 200s anyway (`deg=true, esc=0`). **No prompt tweak makes a 4B local model reliably surface a specific sentence.**
+2. **Two real slot bugs on the sentence that *is* extracted.** When e4b (or the miner) does read "configuration E achieves 7.3% top-5 error", (a) it has **no dataset** ("test set", not "ImageNet") → `buildCandidateEdges` drops it, and (b) it gets flagged **`is_own_contribution=false`** because the sentence lacks "we"/"our" — the model over-triggers "third-party" on the paper's own config.
+
+**Fixes (all committed together as the edge-formation change):**
+
+| area | change | verification |
+|---|---|---|
+| deterministic result-miner | new `lib/extract/mine.ts`: scans each chunk for a metric+value stated *adjacently* ("N% top-5 error" / "top-5 error of N%") and emits a claim only from **own-result sentences** (first-person / "configuration X") while **skipping every comparison sentence** — so span/value are grounded by construction and competitor numbers (GoogLeNet 6.7%, Clarifai 11.2%) are never mined. Runs beside the LLM tier per chunk; dedup collapses overlaps. Claims carry `mined:true`, shown as "pattern-grounded" in the UI. | `eval/mine-check.ts` (9 checks): mines VGG 7.3% (both phrasings) as own/ImageNet/top-5; refuses competitor + comparison sentences + table rows |
+| dataset from metric convention | in `groundChunk` (and the miner): a `top-5 error` with no named dataset → **ImageNet** (the same ILSVRC convention `canonMetric` already uses for a bare "error"); value/span stay grounded, only the dataset *label* is inferred | edge-check: VGG 7.3% now carries `ImageNet` |
+| ownership correction | `reconcileOwnership` post-pass: re-assert `own=true` when `about_system` is the paper's own system or a generic self-descriptor (`configuration/model/network/single/ensemble/…`); keep the model's `false` only for genuinely **named** competitors | `eval/fix3-check.ts` (+4 checks): "configuration E" → own, GoogLeNet/Clarifai stay third-party |
+| **regression I introduced** | Phase 5.1 sent `keep_alive:"-1"` as a **string**, which Ollama rejects (`400 missing unit in duration "-1"`) — this silently **broke all on-device extraction**. Coerce numeric keep-alive values to a `number` (`-1`/`0`), leave duration strings (`"10m"`) as-is | direct `/api/generate` repro before/after; probe went 0→2 claims |
+
+**End-to-end acceptance (`eval/edge-check.ts`, live cascade + key, `maxChunks=4`):** VGG 7.3% ✓ and ResNet 3.57% ✓ both extracted; **candidate edges 0 → 2**, including the target **VGG 7.3% ↔ ResNet 3.57% on ImageNet / top-5 error**. The miner makes this robust to e4b's per-run variance (ResNet's 3.57% is reliably read from its abstract; VGG's 7.3% is now guaranteed by the pattern miner).
+
+## Phase 5 — demo hardening (session 3)
+
+Reliability + latency work so a live upload behaves predictably in front of judges, on the free-tier key or on-device.
+
+- **5.1 Ollama warmth.** Every local call now sends `keep_alive` (env `OLLAMA_KEEP_ALIVE`, default `-1` = resident forever) so the model isn't evicted between chunks/uploads. `warmOllama()` preloads it before the first chunk and reports `load_duration`; `/api/extract` calls it up front and streams the load time. Measured cold load `gemma4:e4b` ≈ **20.4 s**, ~0 s once warm.
+- **5.2 Progress streaming.** `extractClaims` takes an `onProgress({done,total,heading})` callback; `/api/extract` relays it as a new NDJSON `progress` event and the store renders `Extracting · chunk 3/8 · Results`. The stream was already claim-by-claim; this adds *chunk*-level progress so long papers don't look stalled.
+- **5.3 Graceful degradation.** Backend selection is `auto` (probe `localhost:11434`); a chunk that times out (`OLLAMA_CHUNK_TIMEOUT_MS`, default 120 s) or errors is escalated to the hosted Gemini tier instead of being dropped, and the run sets `stats.degraded` → the route emits a "on-device stalled … hosted fallback covered it" banner. If Ollama is entirely down, the route says so and (with a key) proceeds on hosted Gemma/Gemini.
+- **5.4 Idempotency.** A SHA-256 **content-hash cache** keyed on `(title + sections + options)` returns a prior extraction instantly on any re-run (retry, re-upload, "Verify live" pressed twice) — no re-hitting the model. `noCache` opt bypasses it.
+- **Verification:** `eval/phase5-check.ts` (6 checks, model-free): first call misses / identical re-run is `cached` / cached path still ticks progress / different content misses / `noCache` bypasses / `warmOllama` returns `{ready,loadMs}`. New env documented in `.env.example`.
+
+## Phase 4 — eval-driven loop (session 3)
+
+`eval/run.ts` now also reports, in one pass: **candidate edge count** (cross-paper `buildCandidateEdges` over all extracted claims — the metric the live-defect fixes target), **gold recall on a deterministic 30% holdout** (sorted-by-id, every 3rd — the un-tuned recall number) alongside full recall, and **wall-clock per paper + total**. A `EVAL_SECTIONS=priority|all` flag toggles the section-restriction latency lever.
+
+**Result (frozen corpus, structured source, `gemma4:e4b` local first + Gemini escalation, priority sections, `maxChunks=4`, `EVAL_SECTIONS=priority`):**
+
+| metric | phase4-priority (before miner/slot fixes) | phase4-final (after) |
+|---|---|---|
+| **candidate edges** | **0** | **1** — `ImageNet / top-5 error` (VGG 7.3% ↔ ResNet 3.57%) |
+| mean yield | 2.3 / paper | 2.0 / paper |
+| span-grounding | 100% (gate) | 100% (gate) |
+| value-grounding | 100% | 100% |
+| gold recall (full, 8) | 37.5% | 37.5% |
+| gold recall (30% holdout, 3) | 0% | 33.3% |
+| wall-clock (3 papers) | 634 s (resnet 36 / vgg 357 / densenet 236) | 684 s (resnet 38 / vgg 371 / densenet 268) |
+
+The headline move is **edges 0 → 1**: the exact pair the empty-graph defect blocked now forms, driven by the pattern miner (VGG 7.3%) + reliable e4b abstract read (ResNet 3.57%) + the dataset/ownership slot fixes. Span-grounding stays 100% by construction (the gate). Aggregate **gold recall is flat at 37.5%** and **DenseNet still extracts 0** — honest gaps: (a) DenseNet's headline results are **CIFAR "test error of 3.46%"**, which is *not* an ImageNet top-k pattern, so neither the miner (ImageNet-scoped patterns, by design — plain "error" is too ambiguous to mine safely) nor the flaky local model catches them here; (b) `e4b` is nondeterministic run-to-run (ResNet 3→2 claims between runs) and slow (~30–90 s/chunk), so the aggregate yield wobbles within noise. A faster/GPU Gemma endpoint or a CIFAR-aware miner pattern would lift DenseNet; both are deferred and noted. **Latency:** priority-section restriction is the main lever (ResNet resolves in ~1 chunk / 38 s); the per-paper wall-clock and per-stage `stats.ms` are now logged.
 
 ## Net result
 

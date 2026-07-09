@@ -4,6 +4,7 @@ import {
   dedupSignature,
   paperSystemName,
   inferDataset,
+  reconcileOwnership,
 } from "../src/lib/extract/index";
 import { canonDataset, canonMetric } from "../src/lib/graph";
 import { numericCore } from "../src/lib/extract/ground";
@@ -76,6 +77,20 @@ ok(noValA === noValB, "value-less self-ref pair collapses");
 // a genuinely different result (6.8% vs 7.3%) must NOT collapse (recall guard)
 const distinct = key({ claim_text: "ensemble reaches 6.8% top-5 error", dataset: "ImageNet", metric: "top-5 error", result_value: "6.8%" });
 ok(distinct !== vggAbstract, "distinct value (6.8% vs 7.3%) stays a separate claim");
+
+// ── 5. reconcileOwnership: re-assert own results the model mis-flagged ───────
+const own: Claim[] = [
+  { about_system: "configuration E", is_own_contribution: false } as Claim, // no "we" → mis-flagged
+  { about_system: "our best single-network", is_own_contribution: true } as Claim,
+  { about_system: "", is_own_contribution: false } as Claim, // unnamed → own
+  { about_system: "GoogLeNet", is_own_contribution: false } as Claim, // named competitor → stays third-party
+  { about_system: "Clarifai", is_own_contribution: false } as Claim,
+];
+reconcileOwnership(own, "vgg");
+ok(own[0].is_own_contribution === true, "'configuration E' (generic self-descriptor) re-asserted as own");
+ok(own[2].is_own_contribution === true, "unnamed about_system → own");
+ok(own[3].is_own_contribution === false, "named competitor GoogLeNet stays third-party");
+ok(own[4].is_own_contribution === false, "named competitor Clarifai stays third-party");
 
 console.log(fail === 0 ? "\nAll Fix-3 checks passed." : `\n${fail} check(s) failed.`);
 process.exit(fail === 0 ? 0 : 1);
