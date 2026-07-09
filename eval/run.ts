@@ -7,6 +7,7 @@ dotenv.config({ path: ".env.local" });
 import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { parsePdf, priorityText } from "../src/lib/pdf";
 import { extractClaimsForPaper } from "../src/lib/extractor";
+import { extractClaims } from "../src/lib/extract";
 import {
   scorePaper,
   aggregate,
@@ -17,6 +18,17 @@ import {
 
 const label = process.argv[2] || "baseline";
 const sourceMode = (process.env.EVAL_SOURCE || "pdf") as "pdf" | "structured";
+const extractor = (process.env.EVAL_EXTRACTOR || "v1") as "v1" | "v2";
+
+/** Split "## heading\ntext" structured text back into sections. */
+function parseSections(text: string): { heading: string; text: string }[] {
+  const parts = text.split(/\n(?=## )/);
+  const secs = parts.map((p) => {
+    const m = p.match(/^## (.+)\n([\s\S]*)$/);
+    return m ? { heading: m[1].trim(), text: m[2].trim() } : { heading: "", text: p.trim() };
+  });
+  return secs.filter((s) => s.text.length > 20);
+}
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 interface PaperDef {
@@ -48,9 +60,20 @@ async function main() {
     const { source, input } = await inputFor(p);
     let claims: any[] = [];
     let err = "";
+    let statStr = "";
     try {
-      const out = await extractClaimsForPaper(p.title, input, p.id);
-      claims = out.claims;
+      if (extractor === "v2") {
+        const sections = parseSections(input);
+        const out = await extractClaims(
+          { title: p.title, paperId: p.id, sections: sections.length ? sections : [{ heading: "", text: input }] },
+          { backend: "auto", maxChunks: Number(process.env.EVAL_MAXCHUNKS) || 6 }
+        );
+        claims = out.claims;
+        statStr = ` [${out.stats.backend} chunks=${out.stats.chunks} raw=${out.stats.raw} esc=${out.stats.escalated}]`;
+      } else {
+        const out = await extractClaimsForPaper(p.title, input, p.id);
+        claims = out.claims;
+      }
     } catch (e: any) {
       err = e?.message?.slice(0, 80) || "failed";
     }
@@ -61,6 +84,7 @@ async function main() {
         `span=${(m.span_grounding_rate * 100).toFixed(0).padStart(3)}% ` +
         `value=${(m.value_grounding_rate * 100).toFixed(0).padStart(3)}% ` +
         `goldrecall=${m.gold_recalled}/${m.gold_total}` +
+        statStr +
         (err ? `  ERR:${err}` : "")
     );
     await sleep(2000); // respect free-tier quota

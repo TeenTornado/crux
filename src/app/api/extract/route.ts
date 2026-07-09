@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server";
 import { hasKey } from "@/lib/gemini";
 import { extractClaimsForPaper } from "@/lib/extractor";
+import { extractClaims } from "@/lib/extract";
 import { ingest, extractionInput, type StructuredDoc } from "@/lib/ingest";
 import { DEMO_PAPERS, DEMO_CLAIMS, DEMO_PAPER_BODIES } from "@/lib/demoData";
 import type { ExtractEvent, Paper, Claim } from "@/lib/types";
@@ -158,11 +159,13 @@ export async function POST(req: NextRequest) {
               message: `${sourceLabel(doc.source)} · Gemma 4 extracting · ${paper.title}`,
             });
 
-            const text = extractionInput(doc);
-            const { claims, tier: t } = await extractClaimsForPaper(
-              paper.title,
-              text,
-              paper.paper_id
+            // Phase 2: decomposed, span-grounded, Gemma-local-first cascade.
+            const sections = doc.sections.length
+              ? doc.sections
+              : [{ heading: "", text: extractionInput(doc) }];
+            const { claims, tier: t } = await extractClaims(
+              { title: paper.title, paperId: paper.paper_id, sections },
+              { backend: "auto" }
             );
             tier = t;
             for (const c of claims) {

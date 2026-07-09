@@ -33,7 +33,9 @@ export interface Claim {
   conditions: Conditions;
   source_span: SourceSpan;
   /** Which inference tier produced this claim. */
-  extractor?: "gemma-on-device" | "gemma-hosted" | "demo";
+  extractor?: "gemma-on-device" | "gemma-hosted" | "gemini-escalated" | "demo";
+  /** Phase 2: true once the provenance span is verified verbatim in the source. */
+  grounded?: boolean;
 }
 
 export interface Paper {

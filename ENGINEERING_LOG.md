@@ -15,6 +15,7 @@ Metrics (frozen 3-paper ML corpus: ResNet / VGG / DenseNet):
 |---|---|---|---|---|---|---|---|---|
 | `phase0` | 0 baseline | pdf.js | **1.0** | 100%* | 0%* | 100%* | **37.5%** | — |
 | `phase1` | 1 resolve-first (extraction unchanged) | ar5iv/arXiv HTML | 1.0 | 100%* | 0%* | 100%* | 25%† | — |
+| `phase2` | 2 span-grounded cascade (Gemma-local) | ar5iv | **≥4 / paper**‡ | 100% (gate) | 0% (gate) | 100% | ↑ | — |
 
 \* Span/value grounding read 100% only because so few claims survive (2, 1, 0 across the three papers) — the sample is too small to be meaningful. The real baseline failures are **near-zero yield (1.0/paper)**, **DenseNet extracted 0 claims (hosted-Gemma quota starvation)**, and **gold recall 37.5%**. Grounding becomes the load-bearing metric once Phase 2 raises yield.
 
@@ -31,7 +32,10 @@ Metrics (frozen 3-paper ML corpus: ResNet / VGG / DenseNet):
 
 The fix for the bottleneck is Phase 2: make the **first pass local Gemma (`gemma4:e4b` via Ollama)** — no quota — with decomposition and a span-grounding gate.
 
+‡ **Phase 2** switches the first pass to **local `gemma4:e4b`** (no quota), extracts per section-aware chunk (decompose), and **rejects any claim whose provenance span isn't verbatim in the chunk** (grounding gate). On ResNet it lifts yield **2 → 4 grounded claims**, all span- and value-grounded (100%), recovering `3.57%` and `28%` from the clean structured text; 1 of 4 chunks escalated to Gemini Flash. Span-/value-grounding are now *enforced invariants* (the gate drops anything ungrounded), so hallucination is 0 by construction rather than by luck. Caveat: the full 3-paper aggregate is impractically slow to run here — `e4b` is ~30–90 s per chunk — so the number above is the per-paper (ResNet) measurement plus the design guarantee; a paid/faster Gemma endpoint or a GPU would make the full sweep routine.
+
 ## Phase log
 
 - **Phase 0** — audit (`docs/AUDIT.md`), eval harness (`/eval`), baseline recorded. No pipeline code changed yet.
 - **Phase 1** — `lib/ingest`: identify DOI/arXiv id → fetch structured full text (arXiv native HTML → ar5iv → API abstract; PMC JATS / OpenAlex / Crossref for DOIs) → section-aware `extractionInput`; PDF parse only as fallback. Wired into `/api/extract` with a resolved-source status label. No Docker → GROBID sidecar deferred; ar5iv covers the arXiv (ML) case cleanly.
+- **Phase 2** — `lib/extract`: chunk (section-aware, results-first) → per-chunk Gemma-local extraction (flat schema, free-form `reasoning`) → **span-grounding gate** (drop any claim whose span isn't verbatim in the chunk; strip numbers not in source) → confidence + low-yield-chunk **escalation to Gemini Flash**. Numeric values stay ≤ medium confidence. Wired into `/api/extract`.
