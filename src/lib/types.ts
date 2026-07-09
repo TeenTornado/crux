@@ -36,6 +36,11 @@ export interface Claim {
   extractor?: "gemma-on-device" | "gemma-hosted" | "gemini-escalated" | "demo";
   /** Phase 2: true once the provenance span is verified verbatim in the source. */
   grounded?: boolean;
+  /** Fix 4: the system this result is about (may be a third-party baseline). */
+  about_system?: string;
+  /** Fix 4: is `about_system` this paper's own contribution? Third-party (false)
+   *  claims stay in the source list but never form contradiction edges. */
+  is_own_contribution?: boolean;
 }
 
 export interface Paper {

@@ -42,6 +42,14 @@ The fix for the bottleneck is Phase 2: make the **first pass local Gemma (`gemma
 - **Phase 2** — `lib/extract`: chunk (section-aware, results-first) → per-chunk Gemma-local extraction (flat schema, free-form `reasoning`) → **span-grounding gate** (drop any claim whose span isn't verbatim in the chunk; strip numbers not in source) → confidence + low-yield-chunk **escalation to Gemini Flash**. Numeric values stay ≤ medium confidence. Wired into `/api/extract`.
 - **Phase 3** — `lib/contra`: precision-first adjudication. (1) deterministic **hard guard** — different metric/dataset can never be a contradiction (no model call); (2) strict **Likert adjudicator** (Gemini leads for this orchestration tier, Gemma offline fallback) whose rubric asks whether a differing condition actually *explains* the gap (an estimation detail like single-seed-vs-mean does not); genuine only at likert ≥ 8; (3) **low-confidence-number guard** — two low-confidence values can't make a contradiction alone. Wired into `/api/reconcile`. **Eval: precision 1.00, recall 0.67, zero false positives** on 10 labelled pairs — the deterministic guard catches different-metric/population/dataset instantly, the rubric catches both clearly-genuine pairs (likert 9) and correctly abstains on the hardest single-seed-vs-mean case. The one recall miss is defensible; precision (the metric that matters for trust) is perfect. Note: a genuine contradiction is only assertable when the pair carries the noise band — the adjudicator correctly refuses to assert genuine without it.
 
+## Live-defect fixes (session 2)
+
+Four defects were visible in a live 3-paper upload (VGG/ResNet/DenseNet): 28 span-grounded claims but **0 candidate edges** (empty graph). Metric: **edge count** (VGG 7.3% top-5 error ↔ ResNet 3.57% top-5 error must pair).
+
+| SHA | fix | what changed | before | after |
+|---|---|---|---|---|
+| `fix1` | 1 null task/metric slots | prompt requires metric + infers task; `canonDataset` maps ILSVRC(-year)→imagenet; `canonMetric` folds test/val/rate error + bare classification error→top-5; post-extraction metric/task inference fallback; edges require a value; dedup on canonical keys | **0 edges** | **1 edge** (VGG↔ResNet top-5, unit-verified); third-party & value-less claims form 0 |
+
 ## Net result
 
 - **Ingestion:** arXiv/PMC papers now ingest from clean structured full text with **zero PDF parsing**; the table numbers pdf.js garbled are recovered.

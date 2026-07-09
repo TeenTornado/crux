@@ -53,9 +53,9 @@ Return ONLY this JSON:
 
 Each claim object (keep it FLAT — no nested objects):
 - "claim_text": one standalone sentence for the result; replace "our model"/pronouns with the actual method name.
-- "task": task name, or ""
-- "dataset": dataset/benchmark name, or ""
-- "metric": metric name, or ""
+- "task": the task, INFERRED from the dataset/metric/context. Use one of: "image classification", "object detection", "localization", "semantic segmentation", "machine translation", "question answering". (ImageNet/ILSVRC top-k → image classification; COCO mAP → object detection; ADE20K/Cityscapes mIoU → semantic segmentation; WMT BLEU → machine translation.) Never leave "task" empty when a metric is present.
+- "dataset": dataset/benchmark name (e.g. "ImageNet", "ILSVRC-2014", "CIFAR-10", "COCO"), or ""
+- "metric": the measured quantity, READ FROM THE SENTENCE. Examples: "top-5 error", "top-1 error", "top-1 accuracy", "mAP", "mIoU", "BLEU", "F1", "error rate". A bare "test error" / "classification error" on ImageNet/ILSVRC is "top-5 error". NEVER leave "metric" empty when result_value is present.
 - "result_value": the number exactly as written (e.g. "3.57%", "28.4"), or "" if none
 - "conditions": short phrase of the setup (epochs, augmentation, split, seeds, protocol), or ""
 - "provenance_span": copy the EXACT substring from the SECTION TEXT below that states this result. It MUST appear verbatim in the section.
@@ -63,6 +63,7 @@ Each claim object (keep it FLAT — no nested objects):
 Rules:
 - Every claim needs a provenance_span copied verbatim from the section.
 - Do NOT invent numbers or spans. Copy result_value only if it literally appears in the section.
+- If result_value is present, task AND metric MUST be filled (infer them from context — do not leave them empty).
 - If the section reports no measured results, return {"reasoning":"...","claims":[]}.
 
 SECTION: ${heading || "(body)"}

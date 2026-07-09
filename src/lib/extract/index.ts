@@ -1,6 +1,7 @@
 import { generate, extractJson, MODELS, hasKey } from "../gemini";
 import { chunkExtractionPrompt } from "../prompts";
 import { isGrounded, valueInSource, numericCore } from "./ground";
+import { canonDataset, canonMetric } from "../graph";
 import type { Claim, Conditions } from "../types";
 
 export interface ExtractSection {
@@ -131,6 +132,37 @@ function buildChunks(
 const str = (v: unknown): string =>
   v == null ? "" : typeof v === "string" ? v : typeof v === "number" ? String(v) : "";
 
+/** Derive the metric name from the claim/span when the model left it empty. */
+export function inferMetric(text: string, dataset: string): string {
+  const t = text.toLowerCase();
+  if (/top-?5[^.]{0,20}(error|err)/.test(t)) return "top-5 error";
+  if (/top-?1[^.]{0,20}(error|err)/.test(t)) return "top-1 error";
+  if (/top-?5[^.]{0,20}acc/.test(t)) return "top-5 accuracy";
+  if (/top-?1[^.]{0,20}acc/.test(t)) return "top-1 accuracy";
+  if (/\bmiou\b|mean iou/.test(t)) return "mIoU";
+  if (/\bmap\b|mean average precision|average precision/.test(t)) return "mAP";
+  if (/\bbleu\b/.test(t)) return "BLEU";
+  if (/\bf1\b/.test(t)) return "F1";
+  if (/\bppl\b|perplexity/.test(t)) return "perplexity";
+  const imagenet = /imagenet|ilsvrc/i.test(dataset) || /imagenet|ilsvrc/.test(t);
+  if (/error rate|test error|classification error|\berror\b/.test(t))
+    return imagenet ? "top-5 error" : "error rate";
+  if (/\baccuracy\b/.test(t)) return imagenet ? "top-1 accuracy" : "accuracy";
+  return "";
+}
+
+/** Derive the task from dataset/metric/context when the model left it empty. */
+export function inferTask(dataset: string, metric: string, text: string): string {
+  const hay = `${dataset} ${metric} ${text}`.toLowerCase();
+  if (/localis|localiz/.test(hay)) return "localization";
+  if (/coco|\bmap\b|detection/.test(hay)) return "object detection";
+  if (/ade20k|cityscapes|\bmiou\b|segmentation/.test(hay)) return "semantic segmentation";
+  if (/wmt|\bbleu\b|translation/.test(hay)) return "machine translation";
+  if (/squad|question/.test(hay)) return "question answering";
+  if (/imagenet|ilsvrc|cifar|classification|top-?[15]/.test(hay)) return "image classification";
+  return "";
+}
+
 function groundChunk(
   raw: RawChunkClaim[],
   chunkText: string,
@@ -146,13 +178,17 @@ function groundChunk(
     // Never propagate a number that isn't in the source.
     const result_value = valueGrounded ? valueRaw : "";
     const dataset = str(r.dataset).trim();
-    const metric = str(r.metric).trim();
+    const claimTextRaw = (str(r.claim_text) || span).trim().slice(0, 300) || "(claim)";
+    // Fill task/metric from context when the model left them empty (Fix 1).
+    const inferText = `${str(r.claim_text)} ${span} ${str(r.metric)}`;
+    const metric = str(r.metric).trim() || inferMetric(inferText, dataset);
+    const task = str(r.task).trim() || inferTask(dataset, metric, inferText);
     if (!result_value && !dataset && !metric) continue; // nothing useful
     out.push({
       claim_id: `claim-${crypto.randomUUID().slice(0, 8)}`,
       paper_id: paperId,
-      claim_text: (str(r.claim_text) || span).trim().slice(0, 300) || "(claim)",
-      task: str(r.task).trim(),
+      claim_text: claimTextRaw,
+      task,
       dataset,
       metric,
       result_value,
@@ -172,8 +208,10 @@ function dedup(claims: Claim[]): Claim[] {
   const seen = new Set<string>();
   const out: Claim[] = [];
   for (const c of claims) {
-    const key =
-      `${c.dataset}|${c.metric}|${numericCore(c.result_value) || c.claim_text.slice(0, 40)}`.toLowerCase();
+    // Canonical key folds "error rate 3.57%" and "top-5 error 3.57%" together.
+    const key = `${canonDataset(c.dataset)}|${canonMetric(c.metric)}|${
+      numericCore(c.result_value) || c.claim_text.slice(0, 40)
+    }`.toLowerCase();
     if (seen.has(key)) continue;
     seen.add(key);
     out.push(c);

@@ -7,7 +7,6 @@ async function main(){
   const t0=Date.now();
   const out = await extractClaims({title:"Deep Residual Learning for Image Recognition", paperId:"resnet", sections:secs}, {backend:"auto", maxChunks:3});
   console.log("elapsed", ((Date.now()-t0)/1000).toFixed(0)+"s", "| stats", JSON.stringify(out.stats));
-  console.log("claims:", out.claims.length);
-  for(const c of out.claims.slice(0,8)) console.log("  •", c.dataset||"?", "/", c.metric||"?", "=", c.result_value||"(none)", "[conf",c.result_confidence+"]", "span:", (c.source_span.text||"").slice(0,50));
+  for(const c of out.claims.slice(0,8)) console.log("  • task="+(c.task||"EMPTY")+" | ds="+(c.dataset||"?")+" | metric="+(c.metric||"EMPTY")+" | val="+(c.result_value||"none"));
 }
 main();
