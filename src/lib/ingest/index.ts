@@ -1,5 +1,6 @@
 import { parsePdf } from "../pdf";
 import { identify } from "./identify";
+import { cleanDoc } from "./clean";
 import {
   fetchArxiv,
   fetchOpenAlex,
@@ -53,6 +54,8 @@ export async function ingest(
     };
   }
 
+  // Fix 2: strip LaTeX/citation artifacts BEFORE chunking so spans stay clean.
+  doc = cleanDoc(doc);
   cache.set(key, doc);
   return doc;
 }
