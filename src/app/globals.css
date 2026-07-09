@@ -1,0 +1,132 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import "@xyflow/react/dist/style.css";
+
+:root {
+  --font-serif: "Source Serif 4", Georgia, "Times New Roman", serif;
+  --font-sans: "Inter", system-ui, -apple-system, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", monospace;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  background:
+    radial-gradient(1200px 600px at 15% -10%, rgba(201, 162, 39, 0.06), transparent 60%),
+    radial-gradient(900px 500px at 100% 110%, rgba(107, 143, 113, 0.06), transparent 55%),
+    #14181c;
+  color: #ede6d6;
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+::selection {
+  background: rgba(201, 162, 39, 0.28);
+  color: #f6efe0;
+}
+
+/* Editorial scrollbars */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #37424c transparent;
+}
+*::-webkit-scrollbar {
+  width: 9px;
+  height: 9px;
+}
+*::-webkit-scrollbar-thumb {
+  background: #273038;
+  border-radius: 8px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background: #37424c;
+  background-clip: content-box;
+}
+
+.font-serif {
+  font-family: var(--font-serif);
+  letter-spacing: -0.01em;
+}
+.font-mono {
+  font-family: var(--font-mono);
+}
+
+/* Hairline dividers with a warm tint */
+.hairline {
+  border-color: rgba(237, 230, 214, 0.08);
+}
+
+/* React Flow canvas theming */
+.react-flow {
+  --xy-background-color: transparent;
+  background: transparent;
+}
+.react-flow__attribution {
+  display: none;
+}
+.react-flow__edge-path {
+  stroke-width: 2;
+  /* Ease the grey → verdict-colour resolve. */
+  transition: stroke 0.6s ease, stroke-width 0.3s ease, opacity 0.4s ease;
+}
+.react-flow__handle {
+  opacity: 0;
+  pointer-events: none;
+}
+.react-flow__controls {
+  background: #1d242b;
+  border: 1px solid rgba(237, 230, 214, 0.08);
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: none;
+}
+.react-flow__controls-button {
+  background: #1d242b;
+  border-bottom: 1px solid rgba(237, 230, 214, 0.06);
+  color: #c7bfae;
+  fill: #c7bfae;
+}
+.react-flow__controls-button:hover {
+  background: #273038;
+}
+
+/* Dashed animated flow for edges under reconciliation */
+@keyframes dash {
+  to {
+    stroke-dashoffset: -16;
+  }
+}
+.edge-animating .react-flow__edge-path {
+  stroke-dasharray: 6 5;
+  animation: dash 0.6s linear infinite;
+}
+
+.shimmer {
+  position: relative;
+  overflow: hidden;
+}
+.shimmer::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(237, 230, 214, 0.06),
+    transparent
+  );
+  animation: shimmer 1.6s infinite;
+}
+
+.card-enter {
+  animation: fade-up 0.4s ease-out both;
+}
