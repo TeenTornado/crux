@@ -153,6 +153,22 @@ export function inferMetric(text: string, dataset: string): string {
   return "";
 }
 
+/** Derive the dataset/benchmark from context — only names literally in the text
+ * (the span is grounded, so any filled name is source-grounded, not invented). */
+export function inferDataset(text: string): string {
+  const t = text.toLowerCase();
+  if (/\bilsvrc\b|\bimagenet\b/.test(t)) return "ImageNet";
+  if (/\bcifar-?100\b/.test(t)) return "CIFAR-100";
+  if (/\bcifar-?10\b/.test(t)) return "CIFAR-10";
+  if (/\bsvhn\b/.test(t)) return "SVHN";
+  if (/\bcoco\b/.test(t)) return "COCO";
+  if (/\bade20k\b/.test(t)) return "ADE20K";
+  if (/\bcityscapes\b/.test(t)) return "Cityscapes";
+  if (/\bpascal voc\b|\bvoc\s?200[0-9]\b/.test(t)) return "PASCAL VOC";
+  if (/\bwmt\s?1[0-9]\b/.test(t)) return "WMT";
+  return "";
+}
+
 /** Derive the task from dataset/metric/context when the model left it empty. */
 export function inferTask(dataset: string, metric: string, text: string): string {
   const hay = `${dataset} ${metric} ${text}`.toLowerCase();
@@ -179,10 +195,13 @@ function groundChunk(
     const valueGrounded = valueRaw ? valueInSource(valueRaw, chunkText) : false;
     // Never propagate a number that isn't in the source.
     const result_value = valueGrounded ? valueRaw : "";
-    const dataset = str(r.dataset).trim();
     const claimTextRaw = (str(r.claim_text) || span).trim().slice(0, 300) || "(claim)";
-    // Fill task/metric from context when the model left them empty (Fix 1).
+    // Fill dataset/metric/task from context when the model left them empty
+    // (Fix 1/3). Inference reads the grounded span, so any filled name is
+    // source-grounded — a bare "7.3% top-5 error" claim whose dataset the model
+    // dropped now resolves to ImageNet and can pair/dedup with its twin.
     const inferText = `${str(r.claim_text)} ${span} ${str(r.metric)}`;
+    const dataset = str(r.dataset).trim() || inferDataset(inferText);
     const metric = str(r.metric).trim() || inferMetric(inferText, dataset);
     const task = str(r.task).trim() || inferTask(dataset, metric, inferText);
     if (!result_value && !dataset && !metric) continue; // nothing useful
@@ -210,14 +229,52 @@ function groundChunk(
   return out;
 }
 
-function dedup(claims: Claim[]): Claim[] {
+// Fix 3 — author self-reference. The same result is stated once as "we …" and
+// once by the method name across two chunks; folding both to the paper's system
+// name lets the value-less duplicates collapse.
+const SELF_REF =
+  /\b(we|our team|the authors['’]? team|the authors|our (?:approach|method|model|network|system|architecture|configurations?)|the proposed (?:method|model|network|architecture|approach)|this (?:work|paper|method|approach))\b/gi;
+
+/** Most frequent own-contribution system name; falls back to the title token. */
+export function paperSystemName(claims: Claim[], title = ""): string {
+  const counts = new Map<string, number>();
+  for (const c of claims) {
+    if (c.is_own_contribution === false) continue;
+    const k = (c.about_system || "").trim().toLowerCase();
+    if (k) counts.set(k, (counts.get(k) || 0) + 1);
+  }
+  let best = "";
+  let n = 0;
+  for (const [k, v] of counts) if (v > n) [best, n] = [k, v];
+  if (best) return best;
+  const m = title.match(/[A-Za-z][A-Za-z0-9-]{2,}/);
+  return (m ? m[0] : "this method").toLowerCase();
+}
+
+/** Order-preserving, self-reference-folded, lightly-stemmed dedup signature. */
+export function dedupSignature(text: string, system: string): string {
+  return (text || "")
+    .toLowerCase()
+    .replace(SELF_REF, system)
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim()
+    .split(" ")
+    .filter(Boolean)
+    .map((t) => (t.length > 3 && t.endsWith("s") ? t.slice(0, -1) : t))
+    .join(" ")
+    .slice(0, 80);
+}
+
+function dedup(claims: Claim[], system: string): Claim[] {
   const seen = new Set<string>();
   const out: Claim[] = [];
   for (const c of claims) {
-    // Canonical key folds "error rate 3.57%" and "top-5 error 3.57%" together.
-    const key = `${canonDataset(c.dataset)}|${canonMetric(c.metric)}|${
-      numericCore(c.result_value) || c.claim_text.slice(0, 40)
-    }`.toLowerCase();
+    // A grounded value is the strongest identity (folds "error rate 3.57%" and
+    // "top-5 error 3.57%"); value-less claims fall back to the self-reference-
+    // normalized text so "we …" and "<method> …" phrasings collapse (Fix 3).
+    const tail =
+      numericCore(c.result_value) || dedupSignature(c.claim_text, system);
+    const key = `${canonDataset(c.dataset)}|${canonMetric(c.metric)}|${tail}`.toLowerCase();
     if (seen.has(key)) continue;
     seen.add(key);
     out.push(c);
@@ -276,7 +333,7 @@ export async function extractClaims(
     all.push(...grounded);
   }
 
-  const claims = dedup(all);
+  const claims = dedup(all, paperSystemName(all, input.title));
   stats.grounded = claims.length;
   return { claims, tier: primaryTier, stats };
 }
