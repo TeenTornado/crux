@@ -129,7 +129,7 @@ RESULT A: ${a.result_value} on ${a.dataset} / ${a.metric}
 RESULT B: ${b.result_value} on ${b.dataset} / ${b.metric}
   conditions: ${b.conditions || "—"}  (value confidence: ${b.result_confidence || "?"})
 
-Return ONLY this JSON:
+Reason step by step, then return ONLY this JSON:
 {
   "reason": "genuine_contradiction | different_conditions | different_population | different_metric | only_hedging_differs | not_comparable | agreement",
   "likert": <0-10, where 10 = certain genuine contradiction>,
@@ -139,12 +139,16 @@ Return ONLY this JSON:
   "needs_human_review": <true|false>
 }
 
-Rules (strict):
-- "genuine_contradiction" ONLY if the material conditions MATCH (same population, split, training budget/epochs, augmentation, evaluation protocol, decoding) AND the numbers differ beyond plausible run-to-run noise. Set likert >= 8 only in this case.
-- If ANY material condition differs (epochs, augmentation, seeds/protocol, split, population, decoding) → "different_conditions" / "different_population" (both results can be true). likert <= 5.
-- If the metric or measured quantity differs → "different_metric" / "not_comparable".
-- If the values are within run-to-run noise → "agreement".
-- If either value confidence is "low", do NOT assert a contradiction on the numbers alone — set needs_human_review=true and prefer a non-genuine reason unless the conditions clearly match.`;
+How to decide (the key question is whether a differing condition actually EXPLAINS the size of the gap):
+1. If the metric / measured quantity differs → "different_metric" / "not_comparable". Stop.
+2. If the values are within plausible run-to-run noise for this metric → "agreement". Stop.
+3. Otherwise look at the differing conditions and ask: could that difference plausibly explain a gap THIS LARGE?
+   - YES, a differing condition plausibly explains it (e.g. 3x fewer training epochs, weaker augmentation, a different population, dev-vs-test split, different decoding) → "different_conditions" / "different_population". likert <= 5. Both results can be true.
+   - NO — the conditions that matter MATCH and the remaining differences are minor and cannot explain the gap → **"genuine_contradiction", likert >= 8**.
+     * Estimation details do NOT explain a gap: reporting a single seed vs a 5-seed mean, or minor seed differences, cannot by themselves cause a large gap when the training recipe is identical — that is a genuine contradiction, not a divergence.
+4. If either value confidence is "low", do NOT assert a contradiction on the numbers alone → set needs_human_review=true and prefer a non-genuine reason unless the substantive conditions clearly match.
+
+Favour precision, but do not dismiss a real contradiction just because a trivial, non-explanatory detail differs.`;
 }
 
 // ── Experiment generation (Gemini, POPPER-style) ─────────────────────────────

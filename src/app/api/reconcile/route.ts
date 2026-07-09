@@ -1,36 +1,20 @@
 import { NextRequest, NextResponse } from "next/server";
-import { generate, extractJson, hasKey, MODELS } from "@/lib/gemini";
-import { reconciliationPrompt } from "@/lib/prompts";
 import { heuristicReconcile } from "@/lib/heuristics";
-import type { Claim, Reconciliation, Verdict } from "@/lib/types";
+import { adjudicate, type AdjClaim } from "@/lib/contra";
+import type { Claim } from "@/lib/types";
 
 export const runtime = "nodejs";
 export const maxDuration = 120;
 
-const VERDICTS: Verdict[] = [
-  "GENUINE_CONTRADICTION",
-  "CONTEXT_CONDITIONED_DIVERGENCE",
-  "AGREEMENT",
-];
-
-function coerce(raw: any, a: Claim, b: Claim): Reconciliation {
-  const verdict: Verdict = VERDICTS.includes(raw?.verdict)
-    ? raw.verdict
-    : "AGREEMENT";
+/** Flatten the structured conditions object into a single phrase for the adjudicator. */
+function toAdjClaim(c: Claim): AdjClaim {
+  const conds = Object.values(c.conditions || {}).filter(Boolean).join("; ");
   return {
-    verdict,
-    confidence:
-      typeof raw?.confidence === "number"
-        ? Math.max(0, Math.min(1, raw.confidence))
-        : 0.6,
-    reasoning: String(raw?.reasoning || "").trim() || heuristicReconcile(a, b).reasoning,
-    differing_conditions: Array.isArray(raw?.differing_conditions)
-      ? raw.differing_conditions.map(String).slice(0, 8)
-      : [],
-    shared_conditions: Array.isArray(raw?.shared_conditions)
-      ? raw.shared_conditions.map(String).slice(0, 8)
-      : [],
-    needs_human_review: Boolean(raw?.needs_human_review),
+    dataset: c.dataset,
+    metric: c.metric,
+    result_value: c.result_value,
+    conditions: conds,
+    result_confidence: c.result_confidence,
   };
 }
 
@@ -40,24 +24,19 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Missing claims" }, { status: 400 });
   }
 
-  if (!hasKey()) {
-    return NextResponse.json({
-      reconciliation: heuristicReconcile(a, b),
-      engine: "heuristic",
-    });
-  }
-
   try {
-    const { text, thought, model } = await generate(
-      MODELS.reconcile(),
-      reconciliationPrompt(a, b),
-      { json: true, thinkingLevel: "low", temperature: 0.3, maxOutputTokens: 3000 }
-    );
-    const reconciliation = coerce(extractJson(text), a, b);
+    // Phase 3: precision-first — deterministic guard + strict Likert adjudicator.
+    const adj = await adjudicate(toAdjClaim(a), toAdjClaim(b));
+    if (adj.engine === "none") {
+      // No local model and no key — fall back to the offline heuristic.
+      return NextResponse.json({ reconciliation: heuristicReconcile(a, b), engine: "heuristic" });
+    }
     return NextResponse.json({
-      reconciliation,
-      engine: model,
-      thinking: thought || null,
+      reconciliation: adj.reconciliation,
+      engine: adj.engine,
+      reason: adj.reason,
+      likert: adj.likert,
+      comparable: adj.comparable,
     });
   } catch (err: any) {
     return NextResponse.json({

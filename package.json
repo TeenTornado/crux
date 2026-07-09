@@ -10,7 +10,8 @@
     "start": "next start",
     "lint": "next lint",
     "eval": "tsx eval/run.ts",
-    "eval:fixtures": "tsx eval/fixtures.ts"
+    "eval:fixtures": "tsx eval/fixtures.ts",
+    "eval:contra": "tsx eval/contra.ts"
   },
   "dependencies": {
     "@google/genai": "^0.3.1",
