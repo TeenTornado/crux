@@ -1,0 +1,51 @@
+{
+  "precision": 1,
+  "recall": 0.6666666666666666,
+  "tp": 2,
+  "fp": 0,
+  "fn": 1,
+  "false_positives": [],
+  "preds": [
+    {
+      "id": "c1",
+      "predicted_genuine": false
+    },
+    {
+      "id": "c2",
+      "predicted_genuine": true
+    },
+    {
+      "id": "c3",
+      "predicted_genuine": false
+    },
+    {
+      "id": "c4",
+      "predicted_genuine": false
+    },
+    {
+      "id": "c5",
+      "predicted_genuine": false
+    },
+    {
+      "id": "c6",
+      "predicted_genuine": false
+    },
+    {
+      "id": "c7",
+      "predicted_genuine": false
+    },
+    {
+      "id": "c8",
+      "predicted_genuine": true
+    },
+    {
+      "id": "c9",
+      "predicted_genuine": false
+    },
+    {
+      "id": "c10",
+      "predicted_genuine": false
+    }
+  ],
+  "timestamp": "2026-07-09T18:58:26.241Z"
+}
