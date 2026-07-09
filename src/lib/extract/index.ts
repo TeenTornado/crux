@@ -1,6 +1,8 @@
+import { createHash } from "node:crypto";
 import { generate, extractJson, MODELS, hasKey } from "../gemini";
 import { chunkExtractionPrompt } from "../prompts";
 import { isGrounded, valueInSource, numericCore } from "./ground";
+import { mineResults } from "./mine";
 import { canonDataset, canonMetric } from "../graph";
 import type { Claim, Conditions } from "../types";
 
@@ -18,6 +20,15 @@ export interface ExtractOptions {
   backend?: "auto" | "ollama" | "hosted";
   maxChunks?: number;
   chunkChars?: number;
+  // "priority" (default): extract only from Abstract/Results/Discussion-class
+  // sections — where headline numbers live — for a large latency win. "all":
+  // include Methods/Intro too (higher recall of body-buried numbers, slower).
+  sections?: "priority" | "all";
+  // Per-chunk progress (Phase 5.2) — the route relays these as NDJSON so the UI
+  // can show "chunk 3/8 · Results".
+  onProgress?: (p: { done: number; total: number; heading: string }) => void;
+  // Skip the content-hash idempotency cache (Phase 5.4) for this call.
+  noCache?: boolean;
 }
 export interface ExtractResult {
   claims: Claim[];
@@ -28,11 +39,24 @@ export interface ExtractResult {
     grounded: number; // survived the span gate
     escalated: number; // chunks sent to Gemini
     backend: string;
+    ms: number; // wall-clock for the extraction stage
+    degraded: boolean; // on-device was requested/expected but we fell back
+    cached: boolean; // served from the content-hash cache
+    mined: number; // claims added by the deterministic pattern miner
   };
 }
 
 const OLLAMA = process.env.OLLAMA_HOST || "http://127.0.0.1:11434";
 const OLLAMA_MODEL = process.env.OLLAMA_GEMMA_MODEL || "gemma4:e4b";
+// Keep the model resident between chunks/uploads (Phase 5.1). Ollama wants a
+// NUMBER for the sentinel values (-1 = forever, 0 = evict now) and rejects the
+// string "-1" ("missing unit in duration"); a real duration like "10m" stays a
+// string. Coerce accordingly.
+const OLLAMA_KEEP_ALIVE: number | string = (() => {
+  const v = (process.env.OLLAMA_KEEP_ALIVE ?? "-1").trim();
+  return /^-?\d+$/.test(v) ? Number(v) : v;
+})();
+const OLLAMA_CHUNK_TIMEOUT_MS = Number(process.env.OLLAMA_CHUNK_TIMEOUT_MS) || 120_000;
 
 async function ollamaReachable(): Promise<boolean> {
   try {
@@ -52,13 +76,41 @@ async function ollamaExtract(prompt: string): Promise<unknown> {
       prompt,
       format: "json",
       stream: false,
+      keep_alive: OLLAMA_KEEP_ALIVE,
       options: { temperature: 0.2, num_ctx: 8192, num_predict: 1600 },
     }),
-    signal: AbortSignal.timeout(120_000),
+    signal: AbortSignal.timeout(OLLAMA_CHUNK_TIMEOUT_MS),
   });
   if (!res.ok) throw new Error(`ollama ${res.status}`);
   const d = await res.json();
   return extractJson(d.response || "{}");
+}
+
+/**
+ * Preload the local Gemma model so the first chunk doesn't pay the cold-load
+ * cost (Phase 5.1). Fire-and-forget from the route; resolves to the reported
+ * load time in ms (0 if unreachable). Safe to call repeatedly.
+ */
+export async function warmOllama(): Promise<{ ready: boolean; loadMs: number }> {
+  try {
+    const res = await fetch(`${OLLAMA}/api/generate`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: OLLAMA_MODEL,
+        prompt: "ok",
+        stream: false,
+        keep_alive: OLLAMA_KEEP_ALIVE,
+        options: { num_predict: 1 },
+      }),
+      signal: AbortSignal.timeout(60_000),
+    });
+    if (!res.ok) return { ready: false, loadMs: 0 };
+    const d = await res.json();
+    return { ready: true, loadMs: Math.round((d.load_duration || 0) / 1e6) };
+  } catch {
+    return { ready: false, loadMs: 0 };
+  }
 }
 
 async function geminiExtract(prompt: string): Promise<unknown> {
@@ -103,17 +155,27 @@ const emptyConditions = (other: string | null): Conditions => ({
   other,
 });
 
-/** Section-aware chunks, results/experiments first, long sections split. */
+const PRIORITY_SECTION =
+  /result|experiment|evaluation|benchmark|comparison|ablation|table|main|abstract|discussion|conclusion/i;
+
+/** Section-aware chunks, results/experiments first, long sections split. In
+ * "priority" mode the non-priority (Methods/Intro/Related) sections are dropped
+ * entirely — the headline numbers are almost never buried there, so this is the
+ * main latency lever on a local model. */
 function buildChunks(
   sections: ExtractSection[],
   maxChunks: number,
-  chunkChars: number
+  chunkChars: number,
+  mode: "priority" | "all"
 ): ExtractSection[] {
-  const priority = /result|experiment|evaluation|benchmark|comparison|ablation|table|main|abstract/i;
-  const ordered = [
-    ...sections.filter((s) => priority.test(s.heading)),
-    ...sections.filter((s) => !priority.test(s.heading)),
-  ];
+  const priority = PRIORITY_SECTION;
+  const ordered =
+    mode === "priority"
+      ? sections.filter((s) => priority.test(s.heading))
+      : [
+          ...sections.filter((s) => priority.test(s.heading)),
+          ...sections.filter((s) => !priority.test(s.heading)),
+        ];
   const chunks: ExtractSection[] = [];
   for (const s of ordered) {
     if (chunks.length >= maxChunks) break;
@@ -201,8 +263,15 @@ function groundChunk(
     // source-grounded — a bare "7.3% top-5 error" claim whose dataset the model
     // dropped now resolves to ImageNet and can pair/dedup with its twin.
     const inferText = `${str(r.claim_text)} ${span} ${str(r.metric)}`;
-    const dataset = str(r.dataset).trim() || inferDataset(inferText);
+    let dataset = str(r.dataset).trim() || inferDataset(inferText);
     const metric = str(r.metric).trim() || inferMetric(inferText, dataset);
+    // "top-5 error" is an ImageNet/ILSVRC-scale convention (CIFAR-class tasks
+    // report plain error). If the sentence gives that metric but names no
+    // dataset ("…on the test set, configuration E achieves 7.3% top-5 error"),
+    // attribute it to ImageNet — the same convention canonMetric uses for a
+    // bare "error". The value/span stay grounded; only the dataset label is
+    // inferred from the metric convention.
+    if (!dataset && /top-?5\b/i.test(metric) && /err/i.test(metric)) dataset = "ImageNet";
     const task = str(r.task).trim() || inferTask(dataset, metric, inferText);
     if (!result_value && !dataset && !metric) continue; // nothing useful
     out.push({
@@ -251,6 +320,39 @@ export function paperSystemName(claims: Claim[], title = ""): string {
   return (m ? m[0] : "this method").toLowerCase();
 }
 
+// Generic self-descriptors a paper uses for its OWN variants — not competitor
+// names. A result "about" one of these is the paper's own, even when the
+// sentence lacks "we"/"our" (which trips the model into flagging own=false).
+const GENERIC_SELF =
+  /\b(config|configuration|model|models|network|net|nets|architecture|setup|variant|version|single|multi|ensemble|our|ours|this|proposed|method|system)\b/i;
+
+/**
+ * Correct is_own_contribution after extraction (Fix 4 refinement). The model
+ * over-triggers "third-party" on own results phrased without "we" (e.g. "…the
+ * configuration E achieves 7.3% top-5 error"). Re-assert ownership when the
+ * result is about the paper's own system or a generic self-descriptor; keep the
+ * model's judgement only for genuinely NAMED external systems (GoogLeNet,
+ * Clarifai), which is what should stay excluded from edges.
+ */
+export function reconcileOwnership(claims: Claim[], system: string): void {
+  const sysTokens = system
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim()
+    .split(" ")
+    .filter((t) => t.length > 2);
+  for (const c of claims) {
+    const a = (c.about_system || "").toLowerCase().trim();
+    if (!a) {
+      c.is_own_contribution = true;
+      continue;
+    }
+    const matchesSys = sysTokens.some((t) => a.includes(t));
+    const generic = GENERIC_SELF.test(a) || /^[a-e]$/i.test(a);
+    if (matchesSys || generic) c.is_own_contribution = true;
+    // otherwise leave the model's value — a named competitor stays third-party.
+  }
+}
+
 /** Order-preserving, self-reference-folded, lightly-stemmed dedup signature. */
 export function dedupSignature(text: string, system: string): string {
   return (text || "")
@@ -282,6 +384,16 @@ function dedup(claims: Claim[], system: string): Claim[] {
   return out;
 }
 
+// Content-hash idempotency cache (Phase 5.4): the same paper text + options
+// re-extracted (a retry, a re-upload, "Verify live" pressed twice) returns the
+// prior result instantly instead of re-hitting the model.
+const extractCache = new Map<string, ExtractResult>();
+function contentKey(input: ExtractInput, opts: ExtractOptions): string {
+  const body = input.sections.map((s) => `${s.heading}\n${s.text}`).join("\n\n");
+  const cfg = `${opts.backend ?? "auto"}|${opts.sections ?? "priority"}|${opts.maxChunks ?? 6}|${opts.chunkChars ?? 3000}`;
+  return createHash("sha256").update(`${input.title} ${cfg} ${body}`).digest("hex");
+}
+
 /**
  * Phase 2 extractor: Gemma-local-first, decomposed per section-aware chunk,
  * every claim span-grounded, low-yield chunks escalated to Gemini Flash.
@@ -290,9 +402,20 @@ export async function extractClaims(
   input: ExtractInput,
   opts: ExtractOptions = {}
 ): Promise<ExtractResult> {
+  const t0 = Date.now();
   const maxChunks = opts.maxChunks ?? 6;
   const chunkChars = opts.chunkChars ?? 3000;
   const escalate = opts.escalate ?? true;
+  const sectionMode = opts.sections ?? "priority";
+
+  const cacheKey = opts.noCache ? "" : contentKey(input, opts);
+  if (cacheKey) {
+    const hit = extractCache.get(cacheKey);
+    if (hit) {
+      opts.onProgress?.({ done: hit.stats.chunks, total: hit.stats.chunks, heading: "cached" });
+      return { ...hit, stats: { ...hit.stats, cached: true, ms: Date.now() - t0 } };
+    }
+  }
 
   const useOllama =
     opts.backend === "hosted"
@@ -304,38 +427,70 @@ export async function extractClaims(
     ? "gemma-on-device"
     : "gemma-hosted";
 
-  const chunks = buildChunks(input.sections, maxChunks, chunkChars);
+  // Priority-only sections for latency; if a paper exposes none (odd headings),
+  // fall back to all sections so we never extract from nothing.
+  let chunks = buildChunks(input.sections, maxChunks, chunkChars, sectionMode);
+  if (chunks.length === 0 && sectionMode === "priority") {
+    chunks = buildChunks(input.sections, maxChunks, chunkChars, "all");
+  }
   const all: Claim[] = [];
-  const stats = { chunks: chunks.length, raw: 0, grounded: 0, escalated: 0, backend: useOllama ? "ollama:" + OLLAMA_MODEL : "hosted" };
+  const stats = {
+    chunks: chunks.length,
+    raw: 0,
+    grounded: 0,
+    escalated: 0,
+    backend: useOllama ? "ollama:" + OLLAMA_MODEL : "hosted",
+    ms: 0,
+    degraded: false,
+    cached: false,
+    mined: 0,
+  };
 
+  let done = 0;
   for (const ch of chunks) {
     const prompt = chunkExtractionPrompt(input.title, ch.heading, ch.text);
     let raw: RawChunkClaim[] = [];
+    let chunkFailed = false;
     try {
       raw = parseRaw(useOllama ? await ollamaExtract(prompt) : await geminiExtract(prompt));
     } catch {
       raw = [];
+      chunkFailed = true; // timeout / model down — degrade for this chunk
     }
     stats.raw += raw.length;
     let grounded = groundChunk(raw, ch.text, input.paperId, primaryTier);
 
-    // Escalate a starved chunk to Gemini Flash (only that chunk).
+    // Escalate a starved OR failed chunk to Gemini Flash (only that chunk). This
+    // is the graceful-degradation path (Phase 5.3): if on-device stalls, the
+    // hosted tier covers the chunk instead of dropping it.
     if (grounded.length === 0 && escalate && hasKey() && useOllama) {
       try {
         const g2 = parseRaw(await geminiExtract(prompt));
         stats.raw += g2.length;
         grounded = groundChunk(g2, ch.text, input.paperId, "gemini-escalated");
         if (grounded.length) stats.escalated++;
+        if (chunkFailed) stats.degraded = true;
       } catch {
         /* leave empty */
       }
     }
-    all.push(...grounded);
+    if (chunkFailed && grounded.length === 0) stats.degraded = true;
+    // Deterministic pattern safety net: catch headline numbers the LLM tier
+    // missed (span/value grounded by construction, own-results only).
+    const mined = mineResults(ch.text, input.paperId, primaryTier);
+    stats.mined += mined.length;
+    all.push(...grounded, ...mined);
+    opts.onProgress?.({ done: ++done, total: chunks.length, heading: ch.heading || "body" });
   }
 
-  const claims = dedup(all, paperSystemName(all, input.title));
+  const system = paperSystemName(all, input.title);
+  reconcileOwnership(all, system); // fix over-flagged own results before edges
+  const claims = dedup(all, system);
   stats.grounded = claims.length;
-  return { claims, tier: primaryTier, stats };
+  stats.ms = Date.now() - t0;
+  const result = { claims, tier: primaryTier, stats };
+  if (cacheKey) extractCache.set(cacheKey, result);
+  return result;
 }
 
 /** Convenience wrapper for plain text (eval / single-section callers). */

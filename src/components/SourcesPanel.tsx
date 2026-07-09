@@ -286,7 +286,12 @@ function ClaimRow({
       </div>
       <div className="mt-1.5 flex items-center justify-between gap-2">
         <span className="inline-flex items-center gap-1 rounded bg-sage-dim/15 px-1.5 py-0.5 font-mono text-[8.5px] uppercase tracking-wide text-sage-soft">
-          <ShieldCheck size={9} /> {onDevice ? "on-device · Gemma 4" : "Gemma 4"}
+          <ShieldCheck size={9} />{" "}
+          {claim.mined
+            ? "pattern-grounded"
+            : onDevice
+            ? "on-device · Gemma 4"
+            : "Gemma 4"}
         </span>
         <span className="shrink-0 font-mono text-[14px] font-semibold text-paper">
           {claim.result_value || "—"}

@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
 import { hasKey } from "@/lib/gemini";
 import { extractClaimsForPaper } from "@/lib/extractor";
-import { extractClaims } from "@/lib/extract";
+import { extractClaims, warmOllama } from "@/lib/extract";
 import { ingest, extractionInput, type StructuredDoc } from "@/lib/ingest";
 import { DEMO_PAPERS, DEMO_CLAIMS, DEMO_PAPER_BODIES } from "@/lib/demoData";
 import type { ExtractEvent, Paper, Claim } from "@/lib/types";
@@ -132,6 +132,18 @@ export async function POST(req: NextRequest) {
         const allClaims: Claim[] = [];
         let tier: Claim["extractor"] = "gemma-hosted";
 
+        // Phase 5.1/5.3: preload local Gemma so the first chunk isn't cold, and
+        // tell the user which tier is serving (on-device vs hosted fallback).
+        const warm = await warmOllama();
+        line(controller, {
+          type: "status",
+          message: warm.ready
+            ? `Gemma 4 on-device ready${warm.loadMs ? ` (loaded in ${(warm.loadMs / 1000).toFixed(1)}s)` : ""}`
+            : hasKey()
+            ? "Gemma on-device unavailable — using hosted Gemma 4 / Gemini fallback"
+            : "Gemma on-device unavailable",
+        });
+
         // Each paper is extracted independently: if one fails (parse error,
         // model timeout, rate limit), we skip just that paper and keep going —
         // never inject demo data on top of real results.
@@ -163,11 +175,27 @@ export async function POST(req: NextRequest) {
             const sections = doc.sections.length
               ? doc.sections
               : [{ heading: "", text: extractionInput(doc) }];
-            const { claims, tier: t } = await extractClaims(
+            const { claims, tier: t, stats } = await extractClaims(
               { title: paper.title, paperId: paper.paper_id, sections },
-              { backend: "auto" }
+              {
+                backend: "auto",
+                onProgress: ({ done, total, heading }) =>
+                  line(controller, {
+                    type: "progress",
+                    done,
+                    total,
+                    heading,
+                    paper_id: paper.paper_id,
+                  }),
+              }
             );
             tier = t;
+            if (stats.degraded) {
+              line(controller, {
+                type: "status",
+                message: `⚠ ${paper.title}: on-device stalled on a section — hosted fallback covered it`,
+              });
+            }
             for (const c of claims) {
               allClaims.push(c);
               line(controller, { type: "claim", claim: c });

@@ -36,6 +36,9 @@ export interface Claim {
   extractor?: "gemma-on-device" | "gemma-hosted" | "gemini-escalated" | "demo";
   /** Phase 2: true once the provenance span is verified verbatim in the source. */
   grounded?: boolean;
+  /** Extracted by the deterministic pattern result-miner (metric+value stated
+   *  adjacently), not the LLM tier — span/value grounded by construction. */
+  mined?: boolean;
   /** Fix 4: the system this result is about (may be a third-party baseline). */
   about_system?: string;
   /** Fix 4: is `about_system` this paper's own contribution? Third-party (false)
@@ -95,6 +98,7 @@ export interface ExperimentPlan {
 export type ExtractEvent =
   | { type: "paper"; paper: Paper }
   | { type: "status"; message: string }
+  | { type: "progress"; done: number; total: number; heading: string; paper_id: string }
   | { type: "claim"; claim: Claim }
   | { type: "done"; papers: Paper[]; claims: Claim[]; source: ExtractSource }
   | { type: "error"; message: string };

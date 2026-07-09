@@ -45,6 +45,9 @@ export async function runExtraction(opts: {
       case "status":
         st.setStatus(ev.message);
         break;
+      case "progress":
+        st.setStatus(`Extracting · chunk ${ev.done}/${ev.total} · ${ev.heading}`);
+        break;
       case "claim":
         collectedClaims.push(ev.claim);
         st.addClaim(ev.claim);
