@@ -266,7 +266,17 @@ function ClaimRow({
             {claim.dataset || "—"} · {claim.metric || claim.task}
           </span>
         </span>
-        <ConfidencePill level={claim.result_confidence} />
+        <div className="flex shrink-0 items-center gap-1.5">
+          {claim.is_own_contribution === false && (
+            <span
+              className="rounded bg-ink-600/60 px-1 py-0.5 font-mono text-[8px] uppercase tracking-wide text-paper-faint"
+              title={`Cited third-party result${claim.about_system ? ` (${claim.about_system})` : ""} — context only, not compared`}
+            >
+              cited
+            </span>
+          )}
+          <ConfidencePill level={claim.result_confidence} />
+        </div>
       </div>
       <div className="mt-1 line-clamp-2 font-serif text-[12px] leading-snug text-paper-dim">
         {shown}

@@ -49,6 +49,7 @@ Four defects were visible in a live 3-paper upload (VGG/ResNet/DenseNet): 28 spa
 | SHA | fix | what changed | before | after |
 |---|---|---|---|---|
 | `fix1` | 1 null task/metric slots | prompt requires metric + infers task; `canonDataset` maps ILSVRC(-year)→imagenet; `canonMetric` folds test/val/rate error + bare classification error→top-5; post-extraction metric/task inference fallback; edges require a value; dedup on canonical keys | **0 edges** | **1 edge** (VGG↔ResNet top-5, unit-verified); third-party & value-less claims form 0 |
+| `fix4` | 4 third-party attribution | `about_system` + `is_own_contribution` added to prompt/schema; `buildCandidateEdges` excludes non-own claims; "cited" marker in the source list | 3rd-party claims *would* edge after Fix 1 | GoogLeNet 6.7% & Clarifai 11.2%/11.7% flagged `own=false` → **0 edges** (verified on the VGG comparison paragraph); VGG's own 7.0% stays edge-eligible |
 
 ## Net result
 

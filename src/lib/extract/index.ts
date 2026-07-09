@@ -77,6 +77,8 @@ interface RawChunkClaim {
   metric?: string;
   result_value?: string;
   conditions?: string;
+  about_system?: string;
+  is_own_contribution?: boolean;
   provenance_span?: string;
 }
 
@@ -199,6 +201,10 @@ function groundChunk(
       source_span: { page: 0, text: span.slice(0, 400) },
       extractor: tier,
       grounded: true,
+      about_system: str(r.about_system).trim() || undefined,
+      // Default to own contribution unless the model explicitly flags a
+      // third-party result (competitor/baseline) — those never form edges (Fix 4).
+      is_own_contribution: r.is_own_contribution === false ? false : true,
     });
   }
   return out;

@@ -58,12 +58,15 @@ Each claim object (keep it FLAT — no nested objects):
 - "metric": the measured quantity, READ FROM THE SENTENCE. Examples: "top-5 error", "top-1 error", "top-1 accuracy", "mAP", "mIoU", "BLEU", "F1", "error rate". A bare "test error" / "classification error" on ImageNet/ILSVRC is "top-5 error". NEVER leave "metric" empty when result_value is present.
 - "result_value": the number exactly as written (e.g. "3.57%", "28.4"), or "" if none
 - "conditions": short phrase of the setup (epochs, augmentation, split, seeds, protocol), or ""
+- "about_system": the system/method this result is ABOUT (e.g. "ResNet-152", "VGG", "Clarifai", "GoogLeNet"). Use the paper's own method name for the paper's results.
+- "is_own_contribution": true if "about_system" is THIS paper's own method/contribution; false if it is a competitor/baseline/prior-work result the paper merely cites for comparison. This paper is "${title}".
 - "provenance_span": copy the EXACT substring from the SECTION TEXT below that states this result. It MUST appear verbatim in the section.
 
 Rules:
 - Every claim needs a provenance_span copied verbatim from the section.
 - Do NOT invent numbers or spans. Copy result_value only if it literally appears in the section.
 - If result_value is present, task AND metric MUST be filled (infer them from context — do not leave them empty).
+- Set is_own_contribution=false for results attributed to other systems (competitors, prior work, leaderboard entries) even if they appear in a comparison table.
 - If the section reports no measured results, return {"reasoning":"...","claims":[]}.
 
 SECTION: ${heading || "(body)"}
