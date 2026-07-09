@@ -8,7 +8,9 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "eval": "tsx eval/run.ts",
+    "eval:fixtures": "tsx eval/fixtures.ts"
   },
   "dependencies": {
     "@google/genai": "^0.3.1",
@@ -29,8 +31,10 @@
     "@types/react": "^19.0.2",
     "@types/react-dom": "^19.0.2",
     "autoprefixer": "^10.4.20",
+    "dotenv": "^17.4.2",
     "postcss": "^8.4.49",
     "tailwindcss": "^3.4.17",
+    "tsx": "^4.23.0",
     "typescript": "^5.7.2"
   }
 }

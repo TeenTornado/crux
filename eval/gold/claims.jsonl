@@ -1,0 +1,8 @@
+{"id":"g-resnet-1","paper_id":"resnet","dataset":"ImageNet","metric":"top-5 error","value":"3.57%","span":"An ensemble of these residual nets achieves 3.57% error on the ImageNet test set","note":"headline abstract result"}
+{"id":"g-resnet-2","paper_id":"resnet","dataset":"COCO","metric":"relative improvement","value":"28%","span":"we obtain a 28% relative improvement on the COCO object detection dataset","note":"abstract"}
+{"id":"g-resnet-3","paper_id":"resnet","dataset":"ImageNet","metric":"depth","value":"152","span":"residual nets with a depth of up to 152 layers","note":"abstract"}
+{"id":"g-vgg-1","paper_id":"vgg","dataset":"ImageNet","metric":"depth","value":"16-19","span":"pushing the depth to 16-19 weight layers","note":"abstract"}
+{"id":"g-vgg-2","paper_id":"vgg","dataset":"ImageNet Challenge 2014","metric":"rank","value":"first","span":"secured the first and the second places in the localisation and classification tracks","note":"abstract"}
+{"id":"g-vgg-3","paper_id":"vgg","dataset":"ImageNet","metric":"top-5 test error","value":"7.3%","span":"7.3% ILSVRC","note":"body — ensemble result (in pdf text)"}
+{"id":"g-vgg-4","paper_id":"vgg","dataset":"ImageNet","metric":"top-5 test error","value":"7.0%","span":"test error to 7.0%","note":"body — dense eval (in pdf text)"}
+{"id":"g-densenet-1","paper_id":"densenet","dataset":"CIFAR-10","metric":"benchmark","value":"CIFAR-10","span":"CIFAR-10, CIFAR-100, SVHN, and ImageNet","note":"abstract benchmark list"}

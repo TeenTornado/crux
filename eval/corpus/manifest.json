@@ -1,0 +1,20 @@
+[
+  {
+    "id": "resnet",
+    "title": "Deep Residual Learning for Image Recognition",
+    "arxiv": "1512.03385",
+    "pdf": "sample-papers/resnet.pdf"
+  },
+  {
+    "id": "vgg",
+    "title": "Very Deep Convolutional Networks for Large-Scale Image Recognition",
+    "arxiv": "1409.1556",
+    "pdf": "sample-papers/vgg.pdf"
+  },
+  {
+    "id": "densenet",
+    "title": "Densely Connected Convolutional Networks",
+    "arxiv": "1608.06993",
+    "pdf": "sample-papers/densenet.pdf"
+  }
+]
