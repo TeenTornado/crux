@@ -2,6 +2,7 @@
   "name": "crux",
   "version": "0.1.0",
   "private": true,
+  "license": "MIT",
   "description": "Crux — extracts structured claims, diagnoses why papers disagree, and generates the experiment that settles it.",
   "scripts": {
     "dev": "next dev",
