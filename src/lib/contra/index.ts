@@ -2,6 +2,7 @@ import { canonDataset, canonMetric } from "../graph";
 import { generate, extractJson, MODELS, hasKey } from "../gemini";
 import { adjudicationPrompt } from "../prompts";
 import { numericCore } from "../extract/ground";
+import { OLLAMA_HOST, OLLAMA_MODEL, OLLAMA_KEEP_ALIVE } from "../ollama";
 import type { Reconciliation, Verdict } from "../types";
 
 export type ContraReason =
@@ -21,19 +22,16 @@ export interface AdjClaim {
   result_confidence?: string;
 }
 
-const OLLAMA = process.env.OLLAMA_HOST || "http://127.0.0.1:11434";
-const OLLAMA_MODEL = process.env.OLLAMA_GEMMA_MODEL || "gemma4:e4b";
-
 async function ollamaReachable(): Promise<boolean> {
   try {
-    const r = await fetch(`${OLLAMA}/api/tags`, { signal: AbortSignal.timeout(2500) });
+    const r = await fetch(`${OLLAMA_HOST}/api/tags`, { signal: AbortSignal.timeout(2500) });
     return r.ok;
   } catch {
     return false;
   }
 }
 async function ollamaAdj(prompt: string): Promise<any> {
-  const res = await fetch(`${OLLAMA}/api/generate`, {
+  const res = await fetch(`${OLLAMA_HOST}/api/generate`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -41,6 +39,7 @@ async function ollamaAdj(prompt: string): Promise<any> {
       prompt,
       format: "json",
       stream: false,
+      keep_alive: OLLAMA_KEEP_ALIVE,
       options: { temperature: 0.1, num_ctx: 4096, num_predict: 900 },
     }),
     signal: AbortSignal.timeout(90_000),

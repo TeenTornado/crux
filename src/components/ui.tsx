@@ -1,8 +1,9 @@
 "use client";
 
+import { useEffect, useRef, useState } from "react";
 import type { Verdict, Confidence } from "@/lib/types";
 import { VERDICT_META, CONFIDENCE_META, paperTint } from "@/lib/theme";
-import { ShieldCheck, AlertTriangle } from "lucide-react";
+import { ShieldCheck, AlertTriangle, Cpu, Loader2 } from "lucide-react";
 
 export function VerdictBadge({
   verdict,
@@ -72,6 +73,65 @@ export function OnDeviceBadge({
     <span className="inline-flex items-center gap-1.5 rounded-full border border-sage-dim/50 bg-sage-dim/10 px-2 py-0.5 font-mono text-[10px] uppercase tracking-wide text-sage-soft">
       <ShieldCheck size={11} />
       {label}
+    </span>
+  );
+}
+
+/**
+ * On-device warmth badge. Preloads the local Gemma model on mount (POST
+ * /api/warmup) so the first extraction is instant, then polls its state so the
+ * demo driver can see "warm ✓" vs "cold ⚠" before hitting Load demo.
+ */
+export function WarmthIndicator() {
+  const [state, setState] = useState<"warming" | "warm" | "cold" | "off">("warming");
+  const [loadMs, setLoadMs] = useState(0);
+
+  useEffect(() => {
+    let alive = true;
+    const check = async () => {
+      try {
+        const r = await fetch("/api/warmup", { cache: "no-store" });
+        const d = await r.json();
+        if (!alive) return;
+        setState(!d.reachable ? "off" : d.warm ? "warm" : "cold");
+      } catch {
+        if (alive) setState("off");
+      }
+    };
+    // Kick off a real preload once, then poll status.
+    (async () => {
+      try {
+        const r = await fetch("/api/warmup", { method: "POST", cache: "no-store" });
+        const d = await r.json();
+        if (!alive) return;
+        setLoadMs(d.loadMs || 0);
+        setState(!d.reachable ? "off" : d.ready || d.warm ? "warm" : "cold");
+      } catch {
+        if (alive) setState("off");
+      }
+    })();
+    const id = setInterval(check, 45_000); // model evicts on idle; keep an eye on it
+    return () => {
+      alive = false;
+      clearInterval(id);
+    };
+  }, []);
+
+  if (state === "off") return null; // no Ollama → nothing to show (hosted path)
+
+  const meta = {
+    warming: { cls: "border-gold-dim/50 bg-gold/10 text-gold-soft", label: "Model warming…", icon: <Loader2 size={11} className="animate-spin" /> },
+    warm: { cls: "border-sage-dim/50 bg-sage-dim/10 text-sage-soft", label: `Model warm ✓${loadMs ? ` · ${(loadMs / 1000).toFixed(1)}s` : ""}`, icon: <Cpu size={11} /> },
+    cold: { cls: "border-rust/50 bg-rust/10 text-rust-soft", label: "Model cold ⚠", icon: <AlertTriangle size={11} /> },
+  }[state];
+
+  return (
+    <span
+      title="Local Gemma 4 (Ollama) memory state. Cold = next extraction pays a reload; warming keeps it resident."
+      className={`inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 font-mono text-[10px] uppercase tracking-wide ${meta.cls}`}
+    >
+      {meta.icon}
+      {meta.label}
     </span>
   );
 }

@@ -4,7 +4,7 @@ import { useCallback, useMemo, useRef, useState } from "react";
 import { useStore } from "@/lib/store";
 import { runExtraction, runReconciliation, runLiveDemo } from "@/lib/actions";
 import { useTypewriter } from "@/lib/useTypewriter";
-import { HandleChip, ConfidencePill, OnDeviceBadge } from "./ui";
+import { HandleChip, ConfidencePill, OnDeviceBadge, WarmthIndicator } from "./ui";
 import { paperTint } from "@/lib/theme";
 import {
   UploadCloud,
@@ -148,7 +148,10 @@ export function SourcesPanel() {
           <div className="font-mono text-[10px] uppercase tracking-[0.18em] text-paper-faint">
             Sources · {papers.length} papers · {claims.length} claims
           </div>
-          <OnDeviceBadge source={source} />
+          <div className="flex items-center gap-1.5">
+            <WarmthIndicator />
+            <OnDeviceBadge source={source} />
+          </div>
         </div>
         {claims.length > 0 && (
           <div className="flex items-center gap-2 rounded-lg border border-ink-600 bg-ink-900/50 px-2.5 py-1.5 focus-within:border-gold-dim/60">

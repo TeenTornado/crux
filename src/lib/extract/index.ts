@@ -4,7 +4,17 @@ import { chunkExtractionPrompt } from "../prompts";
 import { isGrounded, valueInSource, numericCore } from "./ground";
 import { mineResults } from "./mine";
 import { canonDataset, canonMetric } from "../graph";
+import {
+  OLLAMA_HOST,
+  OLLAMA_MODEL,
+  OLLAMA_KEEP_ALIVE,
+  OLLAMA_CHUNK_TIMEOUT_MS,
+  ollamaReachable,
+} from "../ollama";
 import type { Claim, Conditions } from "../types";
+
+// Re-exported so existing importers (the /api/extract route) keep working.
+export { warmOllama } from "../ollama";
 
 export interface ExtractSection {
   heading: string;
@@ -46,29 +56,8 @@ export interface ExtractResult {
   };
 }
 
-const OLLAMA = process.env.OLLAMA_HOST || "http://127.0.0.1:11434";
-const OLLAMA_MODEL = process.env.OLLAMA_GEMMA_MODEL || "gemma4:e4b";
-// Keep the model resident between chunks/uploads (Phase 5.1). Ollama wants a
-// NUMBER for the sentinel values (-1 = forever, 0 = evict now) and rejects the
-// string "-1" ("missing unit in duration"); a real duration like "10m" stays a
-// string. Coerce accordingly.
-const OLLAMA_KEEP_ALIVE: number | string = (() => {
-  const v = (process.env.OLLAMA_KEEP_ALIVE ?? "-1").trim();
-  return /^-?\d+$/.test(v) ? Number(v) : v;
-})();
-const OLLAMA_CHUNK_TIMEOUT_MS = Number(process.env.OLLAMA_CHUNK_TIMEOUT_MS) || 120_000;
-
-async function ollamaReachable(): Promise<boolean> {
-  try {
-    const r = await fetch(`${OLLAMA}/api/tags`, { signal: AbortSignal.timeout(2500) });
-    return r.ok;
-  } catch {
-    return false;
-  }
-}
-
 async function ollamaExtract(prompt: string): Promise<unknown> {
-  const res = await fetch(`${OLLAMA}/api/generate`, {
+  const res = await fetch(`${OLLAMA_HOST}/api/generate`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -84,33 +73,6 @@ async function ollamaExtract(prompt: string): Promise<unknown> {
   if (!res.ok) throw new Error(`ollama ${res.status}`);
   const d = await res.json();
   return extractJson(d.response || "{}");
-}
-
-/**
- * Preload the local Gemma model so the first chunk doesn't pay the cold-load
- * cost (Phase 5.1). Fire-and-forget from the route; resolves to the reported
- * load time in ms (0 if unreachable). Safe to call repeatedly.
- */
-export async function warmOllama(): Promise<{ ready: boolean; loadMs: number }> {
-  try {
-    const res = await fetch(`${OLLAMA}/api/generate`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        model: OLLAMA_MODEL,
-        prompt: "ok",
-        stream: false,
-        keep_alive: OLLAMA_KEEP_ALIVE,
-        options: { num_predict: 1 },
-      }),
-      signal: AbortSignal.timeout(60_000),
-    });
-    if (!res.ok) return { ready: false, loadMs: 0 };
-    const d = await res.json();
-    return { ready: true, loadMs: Math.round((d.load_duration || 0) / 1e6) };
-  } catch {
-    return { ready: false, loadMs: 0 };
-  }
 }
 
 async function geminiExtract(prompt: string): Promise<unknown> {

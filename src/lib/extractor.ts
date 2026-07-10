@@ -1,5 +1,6 @@
 import { generate, extractJson, MODELS } from "./gemini";
 import { extractionPrompt } from "./prompts";
+import { OLLAMA_HOST, OLLAMA_MODEL, OLLAMA_KEEP_ALIVE } from "./ollama";
 import type { Claim, Conditions } from "./types";
 
 type RawClaim = {
@@ -85,18 +86,19 @@ async function extractViaOllama(
   title: string,
   text: string
 ): Promise<unknown> {
-  const host = process.env.OLLAMA_HOST!;
-  const model = process.env.OLLAMA_GEMMA_MODEL || "gemma3:latest";
   // Small local models need an explicit context window (Ollama defaults to a
   // tiny one and silently truncates), and a shorter input to stay responsive.
-  const res = await fetch(`${host}/api/generate`, {
+  // keep_alive MUST be sent here too: omitting it would reset the model's
+  // eviction timer to the ~5-min default and cause a cold reload next call.
+  const res = await fetch(`${OLLAMA_HOST}/api/generate`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      model,
+      model: OLLAMA_MODEL,
       prompt: extractionPrompt(title, text.slice(0, 9000)),
       format: "json",
       stream: false,
+      keep_alive: OLLAMA_KEEP_ALIVE,
       options: { temperature: 0.2, num_ctx: 8192, num_predict: 2048 },
     }),
     signal: AbortSignal.timeout(180_000),

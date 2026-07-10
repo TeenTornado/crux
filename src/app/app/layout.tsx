@@ -10,6 +10,10 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   // Load persisted UI prefs once for the whole /app section.
   useEffect(() => {
     useStore.getState().applyPrefs(loadPrefs());
+    // Preload the local Gemma model the moment the app opens (fire-and-forget),
+    // so it's resident before the user hits "Load demo corpus" — this is what
+    // turns a cold 17-min first extract into a warm ~2.5s one.
+    fetch("/api/warmup", { method: "POST", cache: "no-store" }).catch(() => {});
   }, []);
 
   return (
