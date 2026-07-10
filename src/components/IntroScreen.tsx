@@ -147,6 +147,8 @@ export function IntroScreen() {
     [startSession, router]
   );
 
+
+
   return (
     <div className="relative h-full overflow-y-auto">
       <HomeBlocks onPrefill={prefill} onLoadDemo={loadDemo} />
@@ -185,7 +187,7 @@ export function IntroScreen() {
               <div className="flex items-center gap-2">
                 <button
                   onClick={() => fileRef.current?.click()}
-                  className="flex h-8 w-8 items-center justify-center rounded-full border border-ink-500 text-paper-dim transition-colors hover:border-paper-faint/60 hover:text-paper"
+                  className="flex h-11 w-11 items-center justify-center rounded-full border border-ink-500 text-paper-dim transition-colors hover:border-paper-faint/60 hover:text-paper sm:h-8 sm:w-8"
                   title="Attach PDFs"
                 >
                   <Plus size={16} />
@@ -202,7 +204,7 @@ export function IntroScreen() {
               <button
                 onClick={submitQuestion}
                 disabled={!question.trim()}
-                className="flex h-8 w-8 items-center justify-center rounded-full bg-gold text-ink-900 transition-colors hover:bg-gold-soft disabled:bg-ink-600 disabled:text-paper-faint"
+                className="flex h-11 w-11 items-center justify-center rounded-full bg-gold text-ink-900 transition-colors hover:bg-gold-soft disabled:bg-ink-600 disabled:text-paper-faint sm:h-8 sm:w-8"
                 title="Start"
               >
                 <ArrowUp size={16} strokeWidth={2.5} />
@@ -300,7 +302,7 @@ function Chip({
   return (
     <button
       onClick={onClick}
-      className={`flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[12.5px] font-medium transition-colors ${
+      className={`flex min-h-[44px] items-center gap-1.5 rounded-full border px-3 py-1.5 text-[12.5px] font-medium transition-colors sm:min-h-0 ${
         active
           ? "border-gold-dim/60 bg-gold/10 text-paper"
           : "border-ink-500 bg-ink-800/40 text-paper-dim hover:border-paper-faint/50 hover:text-paper"

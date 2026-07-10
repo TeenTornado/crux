@@ -153,7 +153,7 @@ function Nav() {
         </nav>
         <Link
           href="/app"
-          className="flex items-center gap-1.5 rounded-lg border border-ink-500 px-3 py-1.5 text-[13px] font-medium text-paper transition-colors hover:border-gold-dim/60 hover:bg-gold/5"
+          className="flex min-h-[44px] items-center gap-1.5 whitespace-nowrap rounded-lg border border-ink-500 px-3 py-2 text-[13px] font-medium text-paper transition-colors hover:border-gold-dim/60 hover:bg-gold/5 md:min-h-0 md:py-1.5"
         >
           Open app <ArrowRight size={14} />
         </Link>
@@ -164,7 +164,7 @@ function Nav() {
 
 function Hero({ onTryDemo }: { onTryDemo: () => void }) {
   return (
-    <section className="relative flex min-h-[calc(100vh-61px)] flex-col items-center justify-center overflow-hidden px-5 py-14">
+    <section className="relative flex min-h-[calc(100dvh-61px)] flex-col items-center justify-center overflow-hidden px-5 py-14">
       {/* Scattered interactive evidence blocks (xl+) — every block → Try the demo */}
       <HomeBlocks onAll={onTryDemo} allHint="try it" />
 
@@ -181,7 +181,7 @@ function Hero({ onTryDemo }: { onTryDemo: () => void }) {
             Closes the evidence-to-experiment loop
           </span>
         </div>
-        <h1 className="font-serif text-[40px] font-semibold leading-[1.04] tracking-tight text-paper md:text-[58px]">
+        <h1 className="font-serif text-[34px] font-semibold leading-[1.06] tracking-tight text-paper sm:text-[40px] md:text-[58px] md:leading-[1.04]">
           Find the crux of <span className="text-gold-soft">why</span> papers
           disagree.
         </h1>
@@ -288,7 +288,7 @@ function Explainer() {
     },
   ];
   return (
-    <section id="how" className="mx-auto max-w-6xl px-5 py-24">
+    <section id="how" className="mx-auto max-w-6xl px-5 py-16 md:py-24">
       <Reveal className="text-center">
         <div className="mb-3 font-mono text-[10px] uppercase tracking-[0.2em] text-paper-faint">
           How it works
@@ -360,7 +360,7 @@ function Comparison() {
   const cols = ["Elicit", "Consensus", "scite", "Crux"];
   return (
     <section id="compare" className="border-t border-paper/10 bg-ink-900/30">
-      <div className="mx-auto max-w-5xl px-5 py-24">
+      <div className="mx-auto max-w-5xl px-5 py-16 md:py-24">
         <Reveal className="text-center">
           <div className="mb-3 font-mono text-[10px] uppercase tracking-[0.2em] text-paper-faint">
             How it&apos;s different
@@ -372,8 +372,9 @@ function Comparison() {
         </Reveal>
 
         <Reveal delay={0.1}>
-          <div className="mt-10 overflow-hidden rounded-2xl border border-ink-500/60 bg-ink-800/20">
-            <table className="w-full border-collapse text-left">
+          {/* Mobile: 5 columns can't fit 375px — scroll the table inside the card */}
+          <div className="mt-10 overflow-x-auto rounded-2xl border border-ink-500/60 bg-ink-800/20">
+            <table className="w-full min-w-[560px] border-collapse text-left">
               <thead>
                 <tr>
                   <th className="px-4 py-3.5 text-[11px] font-medium uppercase tracking-wide text-paper-faint">
@@ -466,9 +467,9 @@ function Comparison() {
 
 function ClosingCta({ onTryDemo }: { onTryDemo: () => void }) {
   return (
-    <section className="mx-auto max-w-6xl px-5 py-24">
+    <section className="mx-auto max-w-6xl px-5 py-16 md:py-24">
       <Reveal>
-        <div className="relative overflow-hidden rounded-3xl border border-ink-500/60 bg-ink-800/40 px-6 py-16 text-center">
+        <div className="relative overflow-hidden rounded-3xl border border-ink-500/60 bg-ink-800/40 px-5 py-12 text-center md:px-6 md:py-16">
           {/* glow */}
           <div
             className="pointer-events-none absolute inset-0"

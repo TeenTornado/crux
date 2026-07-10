@@ -328,7 +328,7 @@ function EdgeDetail({ edge }: { edge: CandidateEdge }) {
           {/* Producing engine — honest label for the on-device story */}
           {r.engine && <EngineBadge engine={r.engine} kind="reconciled" />}
 
-          <div className="mb-4 grid grid-cols-2 gap-2">
+          <div className="mb-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
             <CondList
               title="Shared conditions"
               items={r.shared_conditions}
@@ -344,7 +344,7 @@ function EdgeDetail({ edge }: { edge: CandidateEdge }) {
           {/* Collapsible reasoning trace */}
           <button
             onClick={() => setShowReasoning((v) => !v)}
-            className="mb-2 flex w-full items-center justify-between rounded-lg border border-ink-600 bg-ink-800/50 px-3 py-2 text-left transition-colors hover:border-ink-500"
+            className="mb-2 flex w-full items-center justify-between rounded-lg border border-ink-600 bg-ink-800/50 px-3 py-3 text-left transition-colors hover:border-ink-500 lg:py-2"
           >
             <span className="flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-wide text-paper-dim">
               <Beaker size={12} /> Reasoning trace
@@ -367,7 +367,7 @@ function EdgeDetail({ edge }: { edge: CandidateEdge }) {
             <button
               onClick={onGenerate}
               disabled={genLoading}
-              className="flex w-full items-center justify-center gap-2 rounded-lg bg-rust px-3 py-2.5 text-[13px] font-semibold text-paper transition-colors hover:bg-rust-soft disabled:opacity-60"
+              className="flex w-full items-center justify-center gap-2 rounded-lg bg-rust px-3 py-3 text-[13px] font-semibold text-paper transition-colors hover:bg-rust-soft disabled:opacity-60 lg:py-2.5"
             >
               {genLoading ? (
                 <>

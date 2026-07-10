@@ -102,7 +102,7 @@ export function AgentState() {
       {/* Minimized by default — the header row stays glanceable, click expands */}
       <button
         onClick={() => setOpen((v) => !v)}
-        className="flex w-full items-center gap-1.5 py-0.5 text-left"
+        className="flex min-h-[44px] w-full items-center gap-1.5 py-0.5 text-left lg:min-h-0"
         aria-expanded={open}
         aria-label="Toggle agent state"
       >

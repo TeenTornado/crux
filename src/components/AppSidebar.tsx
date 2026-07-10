@@ -225,7 +225,7 @@ function RailBtn({
     <button
       onClick={onClick}
       title={title}
-      className={`my-0.5 flex h-9 w-9 items-center justify-center rounded-lg transition-colors ${
+      className={`my-0.5 flex h-11 w-11 lg:h-9 lg:w-9 items-center justify-center rounded-lg transition-colors ${
         active ? "bg-ink-700 text-paper" : "text-paper-faint hover:bg-ink-800 hover:text-paper"
       }`}
     >

@@ -76,7 +76,7 @@ export function ConversationOverlay() {
             </div>
             <button
               onClick={() => setExpanded(false)}
-              className="flex items-center gap-1.5 rounded-lg border border-ink-500 px-2.5 py-1.5 text-[12px] text-paper-dim transition-colors hover:border-paper-faint/60 hover:text-paper"
+              className="flex min-h-[44px] items-center gap-1.5 rounded-lg border border-ink-500 px-2.5 py-1.5 text-[12px] text-paper-dim transition-colors hover:border-paper-faint/60 hover:text-paper sm:min-h-0"
             >
               <X size={14} /> Close
             </button>

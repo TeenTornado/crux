@@ -16,7 +16,7 @@ export function Toaster() {
   useEffect(() => subscribeToasts(setToasts), []);
 
   return (
-    <div className="pointer-events-none fixed bottom-5 left-1/2 z-[200] flex -translate-x-1/2 flex-col items-center gap-2">
+    <div className="pointer-events-none fixed bottom-[max(1.25rem,env(safe-area-inset-bottom))] left-1/2 z-[200] flex w-[calc(100vw-2rem)] max-w-md -translate-x-1/2 flex-col items-center gap-2">
       <AnimatePresence>
         {toasts.map((t) => {
           const m = META[t.type];

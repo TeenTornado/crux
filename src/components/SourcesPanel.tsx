@@ -104,7 +104,7 @@ export function SourcesPanel() {
         <button
           onClick={loadDemo}
           disabled={busy}
-          className="mt-3 flex w-full items-center justify-center gap-2 rounded-lg bg-gold/90 px-3 py-2.5 text-[13px] font-semibold text-ink-900 transition-colors hover:bg-gold disabled:opacity-50"
+          className="mt-3 flex w-full items-center justify-center gap-2 rounded-lg bg-gold/90 px-3 py-3 text-[13px] lg:py-2.5 font-semibold text-ink-900 transition-colors hover:bg-gold disabled:opacity-50"
         >
           <Sparkles size={15} />
           Load demo corpus
@@ -113,7 +113,7 @@ export function SourcesPanel() {
         <button
           onClick={() => runLiveDemo()}
           disabled={busy}
-          className="mt-2 flex w-full items-center justify-center gap-2 rounded-lg border border-sage-dim/50 bg-sage-dim/10 px-3 py-2 text-[12px] font-medium text-sage-soft transition-colors hover:border-sage/60 hover:bg-sage-dim/20 disabled:opacity-50"
+          className="mt-2 flex w-full items-center justify-center gap-2 rounded-lg border border-sage-dim/50 bg-sage-dim/10 px-3 py-3 text-[12px] lg:py-2 font-medium text-sage-soft transition-colors hover:border-sage/60 hover:bg-sage-dim/20 disabled:opacity-50"
           title="Re-run the same demo papers through real Gemma 4 + Gemini — no pre-baked results"
         >
           <ShieldCheck size={14} />
@@ -167,7 +167,7 @@ export function SourcesPanel() {
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search claims"
-              className="flex-1 bg-transparent text-[12px] text-paper placeholder:text-paper-faint focus:outline-none"
+              className="flex-1 bg-transparent text-[16px] text-paper placeholder:text-paper-faint focus:outline-none lg:text-[12px]"
             />
             <kbd className="rounded border border-ink-500 px-1 py-0.5 font-mono text-[9px] text-paper-faint">
               /
@@ -234,7 +234,7 @@ export function SourcesPanel() {
         <div className="border-t border-paper/10 p-3">
           <button
             onClick={runReconciliation}
-            className="flex w-full items-center justify-center gap-2 rounded-lg border border-ink-500 px-3 py-2 text-[12px] text-paper-dim transition-colors hover:border-paper-faint/60 hover:text-paper"
+            className="flex w-full items-center justify-center gap-2 rounded-lg border border-ink-500 px-3 py-3 text-[12px] text-paper-dim lg:py-2 transition-colors hover:border-paper-faint/60 hover:text-paper"
           >
             <GitCompareArrows size={14} />
             Re-run reconciliation ({reconciledCount} edges)

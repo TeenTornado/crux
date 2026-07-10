@@ -13,6 +13,13 @@
 html,
 body {
   height: 100%;
+  /* Mobile: absolutely-positioned decor (landing blocks) must never create
+     sideways scroll; clip avoids making body a scroll container. */
+  overflow-x: clip;
+  /* iOS: no grey tap flash; no font inflation in landscape. */
+  -webkit-tap-highlight-color: transparent;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
 }
 
 body {

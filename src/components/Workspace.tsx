@@ -84,7 +84,8 @@ export function Workspace() {
         </section>
 
         <section className="relative min-h-0">
-          <div className="pointer-events-none absolute left-4 top-3 z-10">
+          {/* Mobile: shifted right of the sources FAB (left-3) to avoid overlap */}
+          <div className="pointer-events-none absolute left-16 top-[22px] z-10 lg:left-4 lg:top-3">
             <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-paper-faint">
               Evidence graph
             </span>
@@ -95,7 +96,7 @@ export function Workspace() {
             </ReactFlowProvider>
           </div>
           {phase === "reconciling" && (
-            <div className="pointer-events-none absolute bottom-4 left-1/2 -translate-x-1/2 rounded-full border border-gold-dim/50 bg-ink-800/95 px-4 py-1.5 font-mono text-[11px] text-gold-soft backdrop-blur">
+            <div className="pointer-events-none absolute bottom-[max(1rem,env(safe-area-inset-bottom))] left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full border border-gold-dim/50 bg-ink-800/95 px-4 py-1.5 font-mono text-[11px] text-gold-soft backdrop-blur">
               Reconciling condition diffs…
             </div>
           )}
@@ -140,7 +141,7 @@ export function Workspace() {
             aria-label="Close panel"
           />
           <div
-            className={`absolute inset-y-0 w-[86vw] max-w-[360px] border-paper/10 bg-ink-900 shadow-[0_0_60px_rgba(0,0,0,0.6)] ${
+            className={`absolute inset-y-0 w-[86vw] max-w-[360px] border-paper/10 bg-ink-900 pb-[env(safe-area-inset-bottom)] shadow-[0_0_60px_rgba(0,0,0,0.6)] ${
               mobilePanel === "sources" ? "left-0 border-r" : "right-0 border-l"
             }`}
           >

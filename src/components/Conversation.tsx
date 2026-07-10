@@ -81,7 +81,7 @@ export function Conversation({ variant = "panel" }: { variant?: "panel" | "full"
                 <button
                   key={s}
                   onClick={() => send(s)}
-                  className="rounded-full border border-ink-600 bg-ink-900/50 px-2.5 py-1 text-[11px] text-paper-dim transition-colors hover:border-gold-dim/50 hover:text-paper"
+                  className="rounded-full border border-ink-600 bg-ink-900/50 px-2.5 py-2 text-[11px] text-paper-dim transition-colors hover:border-gold-dim/50 hover:text-paper lg:py-1"
                 >
                   {s}
                 </button>
@@ -101,7 +101,7 @@ export function Conversation({ variant = "panel" }: { variant?: "panel" | "full"
               }}
               rows={1}
               placeholder="Ask about a contradiction, claim, or paper…"
-              className="max-h-44 flex-1 resize-none bg-transparent py-1 text-[13.5px] leading-relaxed text-paper placeholder:text-paper-faint focus:outline-none"
+              className="max-h-44 flex-1 resize-none bg-transparent py-1 text-[16px] leading-relaxed text-paper placeholder:text-paper-faint focus:outline-none lg:text-[13.5px]"
             />
             <button
               onClick={() => send(input)}
@@ -147,7 +147,7 @@ function EmptyState({
             <button
               key={s}
               onClick={() => onPick(s)}
-              className="block w-full rounded-lg border border-ink-600 bg-ink-900/50 px-3 py-2 text-left text-[12px] text-paper-dim transition-colors hover:border-gold-dim/50 hover:text-paper"
+              className="block w-full rounded-lg border border-ink-600 bg-ink-900/50 px-3 py-3 text-left text-[12px] text-paper-dim transition-colors hover:border-gold-dim/50 hover:text-paper lg:py-2"
             >
               {s}
             </button>

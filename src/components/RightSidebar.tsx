@@ -101,7 +101,7 @@ function Tab({
   return (
     <button
       onClick={onClick}
-      className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[12.5px] font-medium transition-colors ${
+      className={`flex min-h-[44px] items-center gap-1.5 rounded-lg px-3 py-1.5 text-[12.5px] font-medium transition-colors lg:min-h-0 ${
         active
           ? "bg-ink-700 text-paper"
           : "text-paper-faint hover:text-paper-dim"

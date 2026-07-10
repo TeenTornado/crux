@@ -1,10 +1,19 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
   title: "Crux — find the crux of why papers disagree",
   description:
     "Crux extracts structured claims, diagnoses why papers disagree, and generates the experiment that would settle it.",
+};
+
+// viewportFit:"cover" makes env(safe-area-inset-*) non-zero on notched
+// phones so fixed elements can pad away from the home indicator.
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
+  themeColor: "#14181C",
 };
 
 export default function RootLayout({

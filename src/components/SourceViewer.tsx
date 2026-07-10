@@ -64,7 +64,7 @@ export function SourceViewer() {
     <AnimatePresence>
       {claim && (
         <motion.div
-          className="fixed inset-0 z-[60] flex items-center justify-center p-4"
+          className="fixed inset-0 z-[60] flex items-end justify-center p-0 sm:items-center sm:p-4"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
@@ -78,7 +78,7 @@ export function SourceViewer() {
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.97, y: 8 }}
             transition={{ duration: 0.25 }}
-            className="relative z-10 flex h-[80vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl border border-ink-500 bg-ink-800 shadow-[0_40px_120px_-30px_rgba(0,0,0,0.8)]"
+            className="relative z-10 flex h-[92dvh] w-full flex-col overflow-hidden rounded-t-2xl border border-ink-500 bg-ink-800 pb-[env(safe-area-inset-bottom)] shadow-[0_40px_120px_-30px_rgba(0,0,0,0.8)] sm:h-[80vh] sm:max-w-3xl sm:rounded-2xl sm:pb-0"
           >
             {/* header */}
             <div className="flex items-center justify-between border-b border-paper/10 px-5 py-3">

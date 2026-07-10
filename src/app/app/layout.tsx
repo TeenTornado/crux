@@ -17,7 +17,9 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   }, []);
 
   return (
-    <div className="flex h-screen overflow-hidden">
+    // h-dvh (not h-screen): 100vh on iOS Safari includes the URL bar and clips
+    // the bottom of the app; dvh tracks the actual visible viewport.
+    <div className="flex h-dvh overflow-hidden">
       <AppSidebar />
       <div className="min-w-0 flex-1">{children}</div>
       <Toaster />
