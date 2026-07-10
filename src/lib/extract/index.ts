@@ -35,8 +35,8 @@ export interface ExtractOptions {
   // include Methods/Intro too (higher recall of body-buried numbers, slower).
   sections?: "priority" | "all";
   // Per-chunk progress (Phase 5.2) — the route relays these as NDJSON so the UI
-  // can show "chunk 3/8 · Results".
-  onProgress?: (p: { done: number; total: number; heading: string }) => void;
+  // can show "chunk 3/8 · Results · 42s". `ms` is that chunk's wall-clock.
+  onProgress?: (p: { done: number; total: number; heading: string; ms?: number }) => void;
   // Skip the content-hash idempotency cache (Phase 5.4) for this call.
   noCache?: boolean;
 }
@@ -360,12 +360,18 @@ function contentKey(input: ExtractInput, opts: ExtractOptions): string {
  * Phase 2 extractor: Gemma-local-first, decomposed per section-aware chunk,
  * every claim span-grounded, low-yield chunks escalated to Gemini Flash.
  */
+// Demo-day chunk budget: extraction cost is ~40-90s per chunk on local e4b and
+// chunks run sequentially, so total latency ≈ papers × chunks × chunk-time.
+// EXTRACT_MAX_CHUNKS=3 roughly halves a live upload; recall of headline numbers
+// is protected by the results-first chunk ordering + the pattern miner.
+const DEFAULT_MAX_CHUNKS = Number(process.env.EXTRACT_MAX_CHUNKS) || 6;
+
 export async function extractClaims(
   input: ExtractInput,
   opts: ExtractOptions = {}
 ): Promise<ExtractResult> {
   const t0 = Date.now();
-  const maxChunks = opts.maxChunks ?? 6;
+  const maxChunks = opts.maxChunks ?? DEFAULT_MAX_CHUNKS;
   const chunkChars = opts.chunkChars ?? 3000;
   const escalate = opts.escalate ?? true;
   const sectionMode = opts.sections ?? "priority";
@@ -410,6 +416,7 @@ export async function extractClaims(
 
   let done = 0;
   for (const ch of chunks) {
+    const tChunk = Date.now();
     const prompt = chunkExtractionPrompt(input.title, ch.heading, ch.text);
     let raw: RawChunkClaim[] = [];
     let chunkFailed = false;
@@ -442,7 +449,12 @@ export async function extractClaims(
     const mined = mineResults(ch.text, input.paperId, primaryTier);
     stats.mined += mined.length;
     all.push(...grounded, ...mined);
-    opts.onProgress?.({ done: ++done, total: chunks.length, heading: ch.heading || "body" });
+    opts.onProgress?.({
+      done: ++done,
+      total: chunks.length,
+      heading: ch.heading || "body",
+      ms: Date.now() - tChunk,
+    });
   }
 
   const system = paperSystemName(all, input.title);

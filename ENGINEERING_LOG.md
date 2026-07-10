@@ -113,6 +113,27 @@ The headline move is **edges 0 → 1**: the exact pair the empty-graph defect bl
 
 **Verified.** `eval/keepalive-check.ts`: the serialised body is `"keep_alive":-1` (numeric, never the rejected string) across all env forms. Live: after a numeric-`-1` warm, `ollama ps` reports `expires_at = 2318-…` (never evicts, was "about a minute from now"); a repeat warm at the same context reloads in **0.3 s** (no resize). Against the running dev server, `GET /api/warmup` → `{warm:true, gemma4:e4b, 3262 MB}`, `POST` → `{ready:true, loadMs:283}`. **Warm extraction is ~2.5 s; the fix keeps it warm.** Extraction logic itself was not touched. Model size deliberately unchanged — `gemma4:e4b` is the right edge model; a bigger model would worsen cold-start/VRAM pressure.
 
+## Scaling-law claim shape (session 3 cont.) — Kaplan vs Chinchilla, 0 edges
+
+**Symptom.** A live Kaplan-2020 + Chinchilla upload extracted the *right* claims — Kaplan's `a (N_opt ∝ C^a) = 0.73`, `b (D_opt ∝ C^b) = 0.27` — but formed **0 candidate edges**, so reconciliation had nothing to judge.
+
+**Root cause.** Scaling-law claims are not `(task, dataset, metric, score)` — they are `(equation, coefficient role, value)`. Two blocks, both by design of the benchmark-tuned canonicalizer: (1) `buildCandidateEdges` **requires a non-empty canonical dataset**, and these claims either have none or differing corpora (WebText2 vs MassiveText); (2) even with an edge, the reconcile `hardGuard` would return `not_comparable` on the corpus mismatch. For scaling laws the corpus is a *condition* the adjudicator should weigh, not an identity that blocks comparison.
+
+**Fix — coefficient-role canonicalization (precision-first).**
+- `graph.ts scalingRole(text)`: detects **param-exponent** (`N_opt ∝ C^a`, ar5iv-mangled `No_pt`, `α_N`, "coefficient a" …) vs **data-exponent** (`D_opt ∝ C^b`, `Do_pt`, `α_D`, tokens/data …) — but **only** with power-law-over-COMPUTE context (`∝`/power law/scaling AND `C^`/compute). A bare "a", a loss-vs-N exponent (`L ∝ N^-α`, no compute), or an ambiguous both-roles sentence returns "" — no guessing.
+- `groupKey`: role-detected claims group as `scaling law · <role>`, **ignoring the corpus**; `buildCandidateEdges` waives the dataset requirement for them (value + own-contribution requirements unchanged — Fix 4 holds).
+- `contra hardGuard`: same-role pairs pass through to the Likert adjudicator (`AdjClaim` gains `claim_text`, threaded from `/api/reconcile`); the adjudication prompt now shows the claim sentence so the model sees the functional form, and its rubric weighs corpus/LR-schedule as differing conditions.
+
+**Verified (`eval/scaling-check.ts`, 17 checks, model-free):** Kaplan 0.73 ↔ Chinchilla 0.49 pair (param), 0.27 ↔ 0.51 pair (data), **a never cross-pairs with b**, third-party scaling claims never edge, benchmark different-dataset guard unchanged, VGG↔ResNet regression intact, and none of the gold contradiction pairs contain scaling markers (the `eval:contra` precision path is structurally untouched — its `toAdj` doesn't even pass `claim_text`).
+
+## Extract latency, part 2: it's throughput, not a bug (session 3 cont.)
+
+A 651 s extract call *with warmup working* (`ollama ps` = resident/Forever, warm ✓ badge, warmup 18 s then <2 s) is the **designed sequential cost**: 2 papers × up to 6 chunks × 40–90 s per e4b chunk, plus 120 s + a Gemini attempt for any timed-out chunk. There is no retry loop (escalation fires at most once per starved chunk) and no cold start left. Levers shipped:
+
+- **`EXTRACT_MAX_CHUNKS`** env (default 6) — chunk budget per paper; `3` roughly halves a live upload. Headline-number recall is protected by results-first chunk ordering + the pattern miner (which reads *every* chunk it sees deterministically).
+- **Per-chunk wall-clock** now streams in the `progress` event → status shows `Extracting · chunk 3/6 · Results · 42s`, so a stall is visible in-UI rather than looking frozen.
+- **Demo-day recipe:** set `EXTRACT_MAX_CHUNKS=3` + `OLLAMA_CHUNK_TIMEOUT_MS=60000`, and **pre-run the exact upload once before judging** — the SHA-256 content-hash cache then returns the judged run instantly (same dev-server process, same files/options).
+
 ## Net result
 
 - **Ingestion:** arXiv/PMC papers now ingest from clean structured full text with **zero PDF parsing**; the table numbers pdf.js garbled are recovered.

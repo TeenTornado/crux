@@ -179,13 +179,14 @@ export async function POST(req: NextRequest) {
               { title: paper.title, paperId: paper.paper_id, sections },
               {
                 backend: "auto",
-                onProgress: ({ done, total, heading }) =>
+                onProgress: ({ done, total, heading, ms }) =>
                   line(controller, {
                     type: "progress",
                     done,
                     total,
                     heading,
                     paper_id: paper.paper_id,
+                    ms,
                   }),
               }
             );

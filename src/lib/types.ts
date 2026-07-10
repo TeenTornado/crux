@@ -98,7 +98,7 @@ export interface ExperimentPlan {
 export type ExtractEvent =
   | { type: "paper"; paper: Paper }
   | { type: "status"; message: string }
-  | { type: "progress"; done: number; total: number; heading: string; paper_id: string }
+  | { type: "progress"; done: number; total: number; heading: string; paper_id: string; ms?: number }
   | { type: "claim"; claim: Claim }
   | { type: "done"; papers: Paper[]; claims: Claim[]; source: ExtractSource }
   | { type: "error"; message: string };

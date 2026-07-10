@@ -46,7 +46,11 @@ export async function runExtraction(opts: {
         st.setStatus(ev.message);
         break;
       case "progress":
-        st.setStatus(`Extracting · chunk ${ev.done}/${ev.total} · ${ev.heading}`);
+        st.setStatus(
+          `Extracting · chunk ${ev.done}/${ev.total} · ${ev.heading}${
+            ev.ms ? ` · ${Math.round(ev.ms / 1000)}s` : ""
+          }`
+        );
         break;
       case "claim":
         collectedClaims.push(ev.claim);
