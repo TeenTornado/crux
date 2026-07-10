@@ -42,6 +42,8 @@ export interface ExtractOptions {
   // Per-chunk progress (Phase 5.2) — the route relays these as NDJSON so the UI
   // can show "chunk 3/8 · Results · 42s". `ms` is that chunk's wall-clock.
   onProgress?: (p: { done: number; total: number; heading: string; ms?: number }) => void;
+  // Free-form status lines (Build 3: "retrying chunk 2 with expanded boundary").
+  onStatus?: (message: string) => void;
   // Skip the content-hash idempotency cache (Phase 5.4) for this call.
   noCache?: boolean;
 }
@@ -58,6 +60,7 @@ export interface ExtractResult {
     degraded: boolean; // on-device was requested/expected but we fell back
     cached: boolean; // served from the content-hash cache
     mined: number; // claims added by the deterministic pattern miner
+    retried: number; // chunks retried locally on an expanded boundary (Build 3)
   };
 }
 
@@ -125,6 +128,13 @@ const emptyConditions = (other: string | null): Conditions => ({
 const PRIORITY_SECTION =
   /result|experiment|evaluation|benchmark|comparison|ablation|table|main|abstract|discussion|conclusion|summary|scaling|power law|optimal|approach|frontier/i;
 
+/** A chunk plus its position in the source section (for boundary expansion). */
+interface Chunk extends ExtractSection {
+  src?: string;
+  start?: number;
+  end?: number;
+}
+
 /** Section-aware chunks, results/experiments first, long sections split. In
  * "priority" mode the non-priority (Methods/Intro/Related) sections are dropped
  * entirely — the headline numbers are almost never buried there, so this is the
@@ -134,7 +144,7 @@ function buildChunks(
   maxChunks: number,
   chunkChars: number,
   mode: "priority" | "all"
-): ExtractSection[] {
+): Chunk[] {
   const priority = PRIORITY_SECTION;
   const ordered =
     mode === "priority"
@@ -143,19 +153,35 @@ function buildChunks(
           ...sections.filter((s) => priority.test(s.heading)),
           ...sections.filter((s) => !priority.test(s.heading)),
         ];
-  const chunks: ExtractSection[] = [];
+  const chunks: Chunk[] = [];
   for (const s of ordered) {
     if (chunks.length >= maxChunks) break;
     const t = s.text.trim();
     if (t.length <= chunkChars) {
-      if (t.length > 40) chunks.push({ heading: s.heading, text: t });
+      if (t.length > 40)
+        chunks.push({ heading: s.heading, text: t, src: t, start: 0, end: t.length });
     } else {
       for (let i = 0; i < t.length && chunks.length < maxChunks; i += chunkChars) {
-        chunks.push({ heading: s.heading, text: t.slice(i, i + chunkChars) });
+        chunks.push({
+          heading: s.heading,
+          text: t.slice(i, i + chunkChars),
+          // Source offsets so a failed chunk can retry on an EXPANDED boundary
+          // (Build 3): the section text and this slice's position within it.
+          src: t,
+          start: i,
+          end: Math.min(t.length, i + chunkChars),
+        });
       }
     }
   }
   return chunks.slice(0, maxChunks);
+}
+
+/** ~30% more surrounding context from the section for the local retry. */
+function expandChunk(ch: Chunk): string {
+  if (!ch.src || ch.start == null || ch.end == null) return ch.text;
+  const pad = Math.round((ch.end - ch.start) * 0.15);
+  return ch.src.slice(Math.max(0, ch.start - pad), Math.min(ch.src.length, ch.end + pad));
 }
 
 /** Ground raw claims against the chunk; drop ungrounded, sanitize values. */
@@ -423,6 +449,7 @@ export async function extractClaims(
     degraded: false,
     cached: false,
     mined: 0,
+    retried: 0,
   };
 
   let done = 0;
@@ -440,6 +467,36 @@ export async function extractClaims(
     stats.raw += raw.length;
     let grounded = groundChunk(raw, ch.text, input.paperId, primaryTier);
 
+    // Build 3 — LOCAL recovery first: a starved/failed chunk retries ONCE
+    // on-device with ~30% more surrounding context before any cloud escalation
+    // or skip. e4b is nondeterministic chunk-to-chunk, so a boundary-expanded
+    // retry legitimately recovers claims the first pass missed.
+    if (grounded.length === 0 && useOllama) {
+      const wider = expandChunk(ch);
+      const expanded = wider.length > ch.text.length;
+      opts.onStatus?.(
+        `Retrying chunk ${done + 1}/${chunks.length} (${ch.heading || "body"})${
+          expanded ? " with expanded boundary" : ""
+        }…`
+      );
+      stats.retried++;
+      try {
+        const r2 = parseRaw(
+          await ollamaExtract(chunkExtractionPrompt(input.title, ch.heading, wider))
+        );
+        stats.raw += r2.length;
+        // Ground against the SAME expanded text the model saw (span gate).
+        grounded = groundChunk(r2, wider, input.paperId, primaryTier);
+      } catch {
+        /* retry failed — fall through to escalation/skip */
+      }
+      if (grounded.length === 0) {
+        opts.onStatus?.(
+          `Chunk ${done + 1}/${chunks.length} deferred — no grounded claims in expanded boundary`
+        );
+      }
+    }
+
     // Escalate a starved OR failed chunk to Gemini Flash (only that chunk). This
     // is the graceful-degradation path (Phase 5.3): if on-device stalls, the
     // hosted tier covers the chunk instead of dropping it.
@@ -456,8 +513,11 @@ export async function extractClaims(
     }
     if (chunkFailed && grounded.length === 0) stats.degraded = true;
     all.push(...grounded);
+    // Increment OUTSIDE the optional call — `?.()` short-circuits argument
+    // evaluation, so a caller without onProgress must not stall the counter.
+    done += 1;
     opts.onProgress?.({
-      done: ++done,
+      done,
       total: chunks.length,
       heading: ch.heading || "body",
       ms: Date.now() - tChunk,

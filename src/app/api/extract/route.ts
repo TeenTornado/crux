@@ -188,6 +188,9 @@ export async function POST(req: NextRequest) {
                     paper_id: paper.paper_id,
                     ms,
                   }),
+                // Build 3: stream local-recovery beats ("retrying chunk 2
+                // with expanded boundary") into the live status line.
+                onStatus: (message) => line(controller, { type: "status", message }),
               }
             );
             tier = t;
