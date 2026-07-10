@@ -15,6 +15,8 @@ function toAdjClaim(c: Claim): AdjClaim {
     result_value: c.result_value,
     conditions: conds,
     result_confidence: c.result_confidence,
+    // Carries the equation for scaling-law claims (hardGuard role detection).
+    claim_text: c.claim_text,
   };
 }
 

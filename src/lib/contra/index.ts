@@ -1,4 +1,4 @@
-import { canonDataset, canonMetric } from "../graph";
+import { canonDataset, canonMetric, scalingRole } from "../graph";
 import { generate, extractJson, MODELS, hasKey } from "../gemini";
 import { adjudicationPrompt } from "../prompts";
 import { numericCore } from "../extract/ground";
@@ -20,6 +20,8 @@ export interface AdjClaim {
   result_value?: string;
   conditions?: string;
   result_confidence?: string;
+  /** Full claim sentence — carries the equation for scaling-law claims. */
+  claim_text?: string;
 }
 
 async function ollamaReachable(): Promise<boolean> {
@@ -59,6 +61,15 @@ async function geminiAdj(prompt: string): Promise<any> {
 
 /** Deterministic precision guard: never call different metric/dataset a contradiction. */
 export function hardGuard(a: AdjClaim, b: AdjClaim): ContraReason | null {
+  // Scaling-law pairs: two claims about the SAME coefficient role in a power
+  // law over compute (Kaplan a=0.73 vs Chinchilla a≈0.50) are comparable by
+  // construction — the differing training corpus (WebText2 vs MassiveText) is
+  // a CONDITION for the adjudicator to weigh, not an identity mismatch. Both
+  // sides must confidently detect the same role; anything else falls through
+  // to the normal benchmark guards.
+  const roleA = scalingRole(`${a.metric || ""} ${a.claim_text || ""}`);
+  const roleB = scalingRole(`${b.metric || ""} ${b.claim_text || ""}`);
+  if (roleA && roleA === roleB) return null;
   if (canonMetric(a.metric || "") !== canonMetric(b.metric || "")) return "different_metric";
   if (canonDataset(a.dataset || "") !== canonDataset(b.dataset || "")) return "not_comparable";
   return null;

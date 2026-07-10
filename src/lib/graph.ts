@@ -43,7 +43,45 @@ export function canonMetric(s: string): string {
   return x;
 }
 
+/**
+ * Scaling-law claim shape (Kaplan/Chinchilla-class papers). These claims are
+ * not (task, dataset, metric, score) — they are (equation, coefficient role,
+ * value): e.g. Kaplan's N_opt ∝ C^a with a=0.73 vs Chinchilla's a≈0.50. Two
+ * such claims are comparable when they describe the SAME coefficient role in
+ * the same functional form (a power law over compute), even though the papers
+ * fit different corpora (WebText2 vs MassiveText) — the corpus is a *condition*
+ * for the reconciler to weigh, not an identity that blocks comparison.
+ *
+ * Detection is precision-first: it requires power-law-over-COMPUTE context
+ * (∝ / power law / scaling AND C^ / compute), so a bare "a"/"b" or a loss-vs-N
+ * exponent (L ∝ N^-α, no compute) never triggers it. Ambiguous sentences that
+ * mention both roles return "" (no pairing) rather than guess.
+ */
+export function scalingRole(s: string): "param-exponent" | "data-exponent" | "" {
+  const x = (s || "").toLowerCase().replace(/\\propto|∝/g, " prop ");
+  const power = /\bprop\b|power[- ]?law|scal(?:es?|ing)/.test(x);
+  const compute = /\bc\s*\^|compute/.test(x);
+  if (!power || !compute) return "";
+  // N_opt / No_pt (ar5iv-mangled) / α_N / "parameters ∝ C^a" / coefficient a
+  const param =
+    /\bn\s?[_o]?\s?opt\b|\bno\s?_?\s?pt\b|(alpha|α)\s?_?\s?n\b|\bparam(eter)?s?\b|model size|\bc\s*\^\s*a\b|c\^a|(coefficient|exponent)\s+a\b/.test(x);
+  // D_opt / Do_pt / α_D / "tokens/data ∝ C^b" / coefficient b
+  const data =
+    /\bd\s?[_o]?\s?opt\b|\bdo\s?_?\s?pt\b|(alpha|α)\s?_?\s?d\b|\btokens?\b|\b(training )?data(set)?( size)?\b|\bc\s*\^\s*b\b|c\^b|(coefficient|exponent)\s+b\b/.test(x);
+  if (param && !data) return "param-exponent";
+  if (data && !param) return "data-exponent";
+  return "";
+}
+
+/** Role for a full claim (reads metric + text, where the equation lives). */
+export function claimScalingRole(c: Pick<Claim, "metric" | "claim_text">): string {
+  return scalingRole(`${c.metric} ${c.claim_text}`);
+}
+
 export function groupKey(c: Claim): string {
+  // Scaling-law claims group by coefficient role, ignoring the corpus.
+  const role = claimScalingRole(c);
+  if (role) return `scaling law · ${role}`;
   return [canonTask(c.task), canonDataset(c.dataset), canonMetric(c.metric)].join(" · ");
 }
 
@@ -66,11 +104,14 @@ export function canonTask(s: string): string {
 export function buildCandidateEdges(claims: Claim[]): CandidateEdge[] {
   const groups = new Map<string, Claim[]>();
   for (const c of claims) {
-    // A reconcilable claim needs a comparable (dataset, metric) AND a value to
-    // compare; third-party results (is_own_contribution === false) never edge (Fix 4).
+    // A reconcilable claim needs a comparable identity AND a value to compare;
+    // third-party results (is_own_contribution === false) never edge (Fix 4).
     if (c.is_own_contribution === false) continue;
     if (!c.result_value) continue;
-    if (!canonDataset(c.dataset) || !canonMetric(c.metric)) continue;
+    // Benchmark claims need (dataset, metric); scaling-law claims have neither
+    // in the benchmark sense — their identity is the coefficient role.
+    if (!claimScalingRole(c) && (!canonDataset(c.dataset) || !canonMetric(c.metric)))
+      continue;
     const k = groupKey(c);
     if (!groups.has(k)) groups.set(k, []);
     groups.get(k)!.push(c);

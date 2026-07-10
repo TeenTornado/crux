@@ -120,18 +120,26 @@ Return ONLY this JSON object:
 // Base rate of real contradictions is tiny (scite: ~0.8% of citations contrast),
 // so a false "contradiction" is far costlier than a miss. Be strict.
 
-export function adjudicationPrompt(
-  a: { dataset?: string; metric?: string; result_value?: string; conditions?: string; result_confidence?: string },
-  b: { dataset?: string; metric?: string; result_value?: string; conditions?: string; result_confidence?: string }
-): string {
-  return `Two reported results share the same task/dataset/metric. Decide their RELATIONSHIP.
-False contradictions destroy trust, so favour precision: only call something a genuine
-contradiction when you are confident.
+type AdjPromptClaim = {
+  dataset?: string;
+  metric?: string;
+  result_value?: string;
+  conditions?: string;
+  result_confidence?: string;
+  claim_text?: string;
+};
 
-RESULT A: ${a.result_value} on ${a.dataset} / ${a.metric}
-  conditions: ${a.conditions || "—"}  (value confidence: ${a.result_confidence || "?"})
-RESULT B: ${b.result_value} on ${b.dataset} / ${b.metric}
-  conditions: ${b.conditions || "—"}  (value confidence: ${b.result_confidence || "?"})
+export function adjudicationPrompt(a: AdjPromptClaim, b: AdjPromptClaim): string {
+  const fmt = (c: AdjPromptClaim, label: string) =>
+    `RESULT ${label}: ${c.result_value} on ${c.dataset || "—"} / ${c.metric}
+${c.claim_text ? `  claim: ${c.claim_text.slice(0, 220)}\n` : ""}  conditions: ${c.conditions || "—"}  (value confidence: ${c.result_confidence || "?"})`;
+  return `Two reported results measure the same quantity (same benchmark metric, or the same
+coefficient in the same functional form — e.g. two fits of the exponent a in N_opt ∝ C^a).
+Decide their RELATIONSHIP. False contradictions destroy trust, so favour precision: only
+call something a genuine contradiction when you are confident.
+
+${fmt(a, "A")}
+${fmt(b, "B")}
 
 Reason step by step, then return ONLY this JSON:
 {
