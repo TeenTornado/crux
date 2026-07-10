@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { ReactFlowProvider } from "@xyflow/react";
+import { FileText, Layers, ChevronRight } from "lucide-react";
 import { Header } from "@/components/Header";
 import { SourcesPanel } from "@/components/SourcesPanel";
 import { EvidenceGraph } from "@/components/EvidenceGraph";
@@ -15,6 +16,9 @@ export function Workspace() {
   const phase = useStore((s) => s.phase);
   const judgeMode = useStore((s) => s.judgeMode);
   const collapsed = useStore((s) => s.sidebarCollapsed);
+  const leftCollapsed = useStore((s) => s.leftCollapsed);
+  // Mobile (<lg): sidebars overlay the graph as drawers instead of grid columns.
+  const [mobilePanel, setMobilePanel] = useState<"sources" | "context" | null>(null);
 
   useEffect(() => {
     if (judgeMode) runJudgeMode();
@@ -29,6 +33,9 @@ export function Workspace() {
       if ((e.metaKey || e.ctrlKey) && e.key === ".") {
         e.preventDefault();
         useStore.getState().toggleSidebar();
+      } else if ((e.metaKey || e.ctrlKey) && e.key === "[") {
+        e.preventDefault();
+        useStore.getState().toggleLeftSidebar();
       } else if (e.key === "/" && !typing) {
         e.preventDefault();
         document.getElementById("claim-search")?.focus();
@@ -63,13 +70,17 @@ export function Workspace() {
 
       <main
         className={`grid min-h-0 flex-1 grid-cols-1 transition-[grid-template-columns] duration-300 ease-out ${
-          collapsed
+          leftCollapsed
+            ? collapsed
+              ? "lg:grid-cols-[44px_1fr_40px] xl:grid-cols-[44px_1fr_40px]"
+              : "lg:grid-cols-[44px_1fr_320px] xl:grid-cols-[44px_1fr_400px]"
+            : collapsed
             ? "lg:grid-cols-[288px_1fr_40px] xl:grid-cols-[320px_1fr_40px]"
             : "lg:grid-cols-[288px_1fr_320px] xl:grid-cols-[320px_1fr_400px]"
         }`}
       >
         <section className="hidden min-h-0 border-r border-paper/10 lg:block">
-          <SourcesPanel />
+          {leftCollapsed ? <SourcesRail /> : <SourcesPanel />}
         </section>
 
         <section className="relative min-h-0">
@@ -88,6 +99,31 @@ export function Workspace() {
               Reconciling condition diffs…
             </div>
           )}
+
+          {/* Mobile: 44px touch targets to open the sidebars as drawers */}
+          <div className="absolute left-3 top-3 z-20 lg:hidden">
+            <button
+              onClick={() => setMobilePanel("sources")}
+              className="flex h-11 w-11 items-center justify-center rounded-xl border border-ink-500 bg-ink-800/90 text-paper-dim backdrop-blur transition-colors hover:text-paper"
+              aria-label="Open sources"
+            >
+              <FileText size={17} />
+            </button>
+          </div>
+          <div className="absolute right-3 top-3 z-20 lg:hidden">
+            <button
+              onClick={() => {
+                // A collapsed right sidebar would render its rail inside the
+                // drawer — force-expand for the mobile overlay.
+                useStore.getState().setSidebarCollapsed(false);
+                setMobilePanel("context");
+              }}
+              className="flex h-11 w-11 items-center justify-center rounded-xl border border-ink-500 bg-ink-800/90 text-paper-dim backdrop-blur transition-colors hover:text-paper"
+              aria-label="Open context"
+            >
+              <Layers size={17} />
+            </button>
+          </div>
         </section>
 
         <section className="hidden min-h-0 lg:block">
@@ -95,8 +131,51 @@ export function Workspace() {
         </section>
       </main>
 
+      {/* Mobile drawers — overlay (not push) with a tap-to-close scrim */}
+      {mobilePanel && (
+        <div className="fixed inset-0 z-40 lg:hidden">
+          <div
+            className="absolute inset-0 bg-black/55"
+            onClick={() => setMobilePanel(null)}
+            aria-label="Close panel"
+          />
+          <div
+            className={`absolute inset-y-0 w-[86vw] max-w-[360px] border-paper/10 bg-ink-900 shadow-[0_0_60px_rgba(0,0,0,0.6)] ${
+              mobilePanel === "sources" ? "left-0 border-r" : "right-0 border-l"
+            }`}
+          >
+            {mobilePanel === "sources" ? <SourcesPanel /> : <RightSidebar />}
+          </div>
+        </div>
+      )}
+
       <SourceViewer />
       <ConversationOverlay />
+    </div>
+  );
+}
+
+/** Collapsed sources column — a thin rail that reclaims space for the graph. */
+function SourcesRail() {
+  const papers = useStore((s) => s.papers);
+  const claims = useStore((s) => s.claims);
+  const setLeftCollapsed = useStore((s) => s.setLeftCollapsed);
+  return (
+    <div className="flex h-full w-full flex-col items-center gap-3 py-3">
+      <button
+        onClick={() => setLeftCollapsed(false)}
+        className="flex h-8 w-8 items-center justify-center rounded-lg text-paper-faint transition-colors hover:text-paper"
+        title="Expand sources (⌘[)"
+        aria-label="Expand sources panel"
+      >
+        <ChevronRight size={16} />
+      </button>
+      <span
+        className="font-mono text-[9px] uppercase tracking-[0.2em] text-paper-faint"
+        style={{ writingMode: "vertical-rl" }}
+      >
+        Sources · {papers.length}p · {claims.length}c
+      </span>
     </div>
   );
 }

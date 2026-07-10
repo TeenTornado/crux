@@ -51,6 +51,7 @@ interface AppState extends UIState {
 
   // sidebar UI (mirrored to localStorage)
   sidebarCollapsed: boolean;
+  leftCollapsed: boolean; // workspace sources panel → rail
   activeTab: "context" | "ask";
   chatExpanded: boolean;
 
@@ -77,6 +78,8 @@ interface AppState extends UIState {
   applyPrefs: (p: Prefs) => void;
   setSidebarCollapsed: (v: boolean) => void;
   toggleSidebar: () => void;
+  setLeftCollapsed: (v: boolean) => void;
+  toggleLeftSidebar: () => void;
   setActiveTab: (t: "context" | "ask") => void;
   setPhase: (p: Phase) => void;
   setStatus: (m: string) => void;
@@ -122,6 +125,7 @@ export const useStore = create<AppState>((set, get) => ({
   chatPending: false,
   entered: false,
   sidebarCollapsed: false,
+  leftCollapsed: false,
   activeTab: "context",
   chatExpanded: false,
 
@@ -189,7 +193,11 @@ export const useStore = create<AppState>((set, get) => ({
   setChatExpanded: (v) => set({ chatExpanded: v }),
 
   applyPrefs: (p) =>
-    set({ sidebarCollapsed: p.sidebarCollapsed, activeTab: p.activeTab }),
+    set({
+      sidebarCollapsed: p.sidebarCollapsed,
+      leftCollapsed: p.leftCollapsed,
+      activeTab: p.activeTab,
+    }),
   setSidebarCollapsed: (v) => {
     savePrefs({ sidebarCollapsed: v });
     set({ sidebarCollapsed: v });
@@ -198,6 +206,15 @@ export const useStore = create<AppState>((set, get) => ({
     const v = !get().sidebarCollapsed;
     savePrefs({ sidebarCollapsed: v });
     set({ sidebarCollapsed: v });
+  },
+  setLeftCollapsed: (v) => {
+    savePrefs({ leftCollapsed: v });
+    set({ leftCollapsed: v });
+  },
+  toggleLeftSidebar: () => {
+    const v = !get().leftCollapsed;
+    savePrefs({ leftCollapsed: v });
+    set({ leftCollapsed: v });
   },
   setActiveTab: (t) => {
     savePrefs({ activeTab: t });

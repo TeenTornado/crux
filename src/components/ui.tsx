@@ -119,10 +119,11 @@ export function WarmthIndicator() {
 
   if (state === "off") return null; // no Ollama → nothing to show (hosted path)
 
+  // One compact pill: model + warmth (4C) — "Gemma 4 · warm ✓ · 0.3s".
   const meta = {
-    warming: { cls: "border-gold-dim/50 bg-gold/10 text-gold-soft", label: "Model warming…", icon: <Loader2 size={11} className="animate-spin" /> },
-    warm: { cls: "border-sage-dim/50 bg-sage-dim/10 text-sage-soft", label: `Model warm ✓${loadMs ? ` · ${(loadMs / 1000).toFixed(1)}s` : ""}`, icon: <Cpu size={11} /> },
-    cold: { cls: "border-rust/50 bg-rust/10 text-rust-soft", label: "Model cold ⚠", icon: <AlertTriangle size={11} /> },
+    warming: { cls: "border-gold-dim/50 bg-gold/10 text-gold-soft", label: "Gemma 4 · warming…", icon: <Loader2 size={11} className="animate-spin" /> },
+    warm: { cls: "border-sage-dim/50 bg-sage-dim/10 text-sage-soft", label: `Gemma 4 · warm ✓${loadMs ? ` · ${(loadMs / 1000).toFixed(1)}s` : ""}`, icon: <Cpu size={11} /> },
+    cold: { cls: "border-rust/50 bg-rust/10 text-rust-soft", label: "Gemma 4 · cold ⚠", icon: <AlertTriangle size={11} /> },
   }[state];
 
   return (

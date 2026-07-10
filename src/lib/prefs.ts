@@ -5,6 +5,8 @@
 
 export interface Prefs {
   sidebarCollapsed: boolean;
+  /** Workspace sources (left) panel collapsed to a rail. */
+  leftCollapsed: boolean;
   activeTab: "context" | "ask";
   navOpen: boolean;
 }
@@ -13,6 +15,7 @@ const KEY = "crux:prefs";
 
 const DEFAULTS: Prefs = {
   sidebarCollapsed: false,
+  leftCollapsed: false,
   activeTab: "context",
   navOpen: false,
 };

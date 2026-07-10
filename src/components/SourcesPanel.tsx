@@ -4,7 +4,7 @@ import { useCallback, useMemo, useRef, useState } from "react";
 import { useStore } from "@/lib/store";
 import { runExtraction, runReconciliation, runLiveDemo } from "@/lib/actions";
 import { useTypewriter } from "@/lib/useTypewriter";
-import { HandleChip, ConfidencePill, OnDeviceBadge, WarmthIndicator } from "./ui";
+import { HandleChip, ConfidencePill, WarmthIndicator } from "./ui";
 import { paperTint } from "@/lib/theme";
 import {
   UploadCloud,
@@ -14,6 +14,7 @@ import {
   GitCompareArrows,
   Search,
   ShieldCheck,
+  PanelLeftClose,
 } from "lucide-react";
 import type { Claim } from "@/lib/types";
 
@@ -21,7 +22,7 @@ export function SourcesPanel() {
   const phase = useStore((s) => s.phase);
   const papers = useStore((s) => s.papers);
   const claims = useStore((s) => s.claims);
-  const source = useStore((s) => s.source);
+  const setLeftCollapsed = useStore((s) => s.setLeftCollapsed);
   const status = useStore((s) => s.statusMessage);
   const edges = useStore((s) => s.edges);
   const selectedClaimId = useStore((s) => s.selectedClaimId);
@@ -142,17 +143,22 @@ export function SourcesPanel() {
         )}
       </div>
 
-      {/* Corpus header + search */}
+      {/* Corpus header + search — compact two-line status (4C) */}
       <div className="space-y-2 px-4 py-2.5">
         <div className="flex items-center justify-between">
           <div className="font-mono text-[10px] uppercase tracking-[0.18em] text-paper-faint">
-            Sources · {papers.length} papers · {claims.length} claims
+            {papers.length} papers · {claims.length} claims
           </div>
-          <div className="flex items-center gap-1.5">
-            <WarmthIndicator />
-            <OnDeviceBadge source={source} />
-          </div>
+          <button
+            onClick={() => setLeftCollapsed(true)}
+            className="hidden h-6 w-6 items-center justify-center rounded text-paper-faint transition-colors hover:text-paper lg:flex"
+            title="Collapse sources (⌘[)"
+            aria-label="Collapse sources panel"
+          >
+            <PanelLeftClose size={14} />
+          </button>
         </div>
+        <WarmthIndicator />
         {claims.length > 0 && (
           <div className="flex items-center gap-2 rounded-lg border border-ink-600 bg-ink-900/50 px-2.5 py-1.5 focus-within:border-gold-dim/60">
             <Search size={13} className="text-paper-faint" />
