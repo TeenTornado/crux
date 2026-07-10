@@ -135,8 +135,11 @@ export async function adjudicate(
   // matched-condition contradictions); local Gemma is the offline fallback.
   // The deterministic guard + Likert threshold + low-confidence guard below keep
   // precision regardless of which model answers.
+  // Local Mode (RECONCILE_BACKEND=local): skip the cloud attempt entirely and
+  // adjudicate on-device — the WiFi-off path, no doomed Gemini call to wait on.
+  const localOnly = process.env.RECONCILE_BACKEND === "local";
   try {
-    if (hasKey()) {
+    if (!localOnly && hasKey()) {
       raw = await geminiAdj(prompt);
       engine = "gemini";
     } else if (await ollamaReachable()) {

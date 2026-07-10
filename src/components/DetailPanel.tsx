@@ -325,6 +325,9 @@ function EdgeDetail({ edge }: { edge: CandidateEdge }) {
             </div>
           </div>
 
+          {/* Producing engine — honest label for the on-device story */}
+          {r.engine && <EngineBadge engine={r.engine} kind="reconciled" />}
+
           <div className="mb-4 grid grid-cols-2 gap-2">
             <CondList
               title="Shared conditions"
@@ -535,6 +538,34 @@ function PlanBlock({ label, body }: { label: string; body: string }) {
     <div className="mb-2.5">
       <SectionLabel>{label}</SectionLabel>
       <p className="text-[12px] leading-snug text-paper-dim">{body}</p>
+    </div>
+  );
+}
+
+/** Honest producing-engine label: on-device Gemma vs Gemini vs deterministic. */
+function EngineBadge({ engine, kind }: { engine: string; kind: "reconciled" | "generated" }) {
+  const local = engine.startsWith("gemma");
+  const label = local
+    ? `${kind} on-device · ${engine.replace(/^gemma(-fallback)?:/, "")}`
+    : engine === "guard"
+    ? "deterministic guard · no model call"
+    : engine.startsWith("heuristic")
+    ? "offline heuristic"
+    : engine === "template"
+    ? "deterministic template"
+    : `${kind} · Gemini`;
+  return (
+    <div className="mb-3">
+      <span
+        className={`inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 font-mono text-[9.5px] uppercase tracking-wide ${
+          local
+            ? "border-sage-dim/50 bg-sage-dim/10 text-sage-soft"
+            : "border-ink-500 bg-ink-800/60 text-paper-faint"
+        }`}
+      >
+        <ShieldAlert size={10} className={local ? "" : "opacity-60"} />
+        {label}
+      </span>
     </div>
   );
 }

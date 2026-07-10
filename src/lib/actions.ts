@@ -128,8 +128,10 @@ export async function runReconciliation() {
           DEMO_RECONCILIATIONS[e.edge_id]
         );
       } else {
-        const { reconciliation } = await reconcile(a, b);
-        useStore.getState().setReconciliation(e.edge_id, reconciliation);
+        const { reconciliation, engine } = await reconcile(a, b);
+        // Keep the producing engine on the verdict so the UI can honestly
+        // label "reconciled on-device · gemma4:e4b" vs Gemini vs guard.
+        useStore.getState().setReconciliation(e.edge_id, { ...reconciliation, engine });
       }
     } catch {
       // leave as pending; keep going

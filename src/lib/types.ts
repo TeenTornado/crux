@@ -65,6 +65,9 @@ export interface Reconciliation {
   shared_conditions: string[];
   /** True when a human should confirm before trusting (per ContraCrow overconfidence). */
   needs_human_review?: boolean;
+  /** Which engine produced the verdict: "gemini" | "gemma:<model>" |
+   *  "gemma-fallback:<model>" | "guard" | "heuristic" | "demo". */
+  engine?: string;
 }
 
 export interface CandidateEdge {
