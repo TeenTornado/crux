@@ -170,12 +170,15 @@ export async function runExperiment(edgeId: string) {
   const a = s.claims.find((c) => c.claim_id === edge.source_claim_id);
   const b = s.claims.find((c) => c.claim_id === edge.target_claim_id);
   if (!a || !b) return null;
-  const { plan } = await generateExperiment(
+  const { plan: rawPlan, engine } = await generateExperiment(
     a,
     b,
     edge.reconciliation?.reasoning || "",
     edgeId
   );
+  // Keep the producing engine on the plan: "generated on-device · gemma4:e4b"
+  // vs Gemini vs deterministic template — never fake the provenance.
+  const plan = { ...rawPlan, engine };
   useStore.getState().setExperiment(edgeId, plan);
   logStep("experiment", plan.title);
   persistExperiment(plan);

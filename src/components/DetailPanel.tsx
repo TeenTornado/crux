@@ -466,6 +466,8 @@ function ExperimentCard({ plan }: { plan: ExperimentPlan }) {
         {plan.title}
       </div>
 
+      {plan.engine && <EngineBadge engine={plan.engine} kind="generated" />}
+
       <PlanBlock label="Null hypothesis (H₀)" body={plan.hypothesis_null} />
       <PlanBlock label="Alternative (H₁)" body={plan.hypothesis_alternative} />
 
@@ -553,6 +555,8 @@ function EngineBadge({ engine, kind }: { engine: string; kind: "reconciled" | "g
     ? "offline heuristic"
     : engine === "template"
     ? "deterministic template"
+    : engine === "demo"
+    ? "curated demo plan"
     : `${kind} · Gemini`;
   return (
     <div className="mb-3">

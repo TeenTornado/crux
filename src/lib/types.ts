@@ -94,6 +94,9 @@ export interface ExperimentPlan {
   expected_outcome_if_paper_b_correct: string;
   estimated_conclusiveness: Confidence;
   estimated_compute_cost: string;
+  /** Producing engine: "gemma:<model>" (on-device) | Gemini model id |
+   *  "template" (deterministic scaffold) | "demo". */
+  engine?: string;
 }
 
 // ── Streaming protocol (server → client, NDJSON) ────────────────────────────
