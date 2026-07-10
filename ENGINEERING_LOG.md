@@ -126,6 +126,20 @@ The headline move is **edges 0 → 1**: the exact pair the empty-graph defect bl
 
 **Verified (`eval/scaling-check.ts`, 17 checks, model-free):** Kaplan 0.73 ↔ Chinchilla 0.49 pair (param), 0.27 ↔ 0.51 pair (data), **a never cross-pairs with b**, third-party scaling claims never edge, benchmark different-dataset guard unchanged, VGG↔ResNet regression intact, and none of the gold contradiction pairs contain scaling markers (the `eval:contra` precision path is structurally untouched — its `toAdj` doesn't even pass `claim_text`).
 
+## Scaling-law shape, round 2: one node per coefficient + starvation-proof mining
+
+The role canonicalizer alone still gave 0 edges on the live Kaplan/Chinchilla run, for two reasons the screenshot made plain: (1) the LLM bundled **both coefficients into one claim** ("For C4, the coefficient a is 0.50 and the coefficient b is 0.50" → value `0.50, 0.50`) so per-coefficient pairing was impossible; (2) **paper A (Kaplan) extracted zero claims** that run — the `0.73, 0.27` in the list was Chinchilla *citing* Kaplan (correctly `cited`/own=false, correctly edge-excluded). Splitting alone can't fix an empty side.
+
+Shipped, all grounded in the real ar5iv text of both papers (`eval/corpus/structured/{kaplan,chinchilla}.txt`, frozen by `eval/fetch-scaling-texts.ts`):
+
+- **`splitCompoundCoefficients` (graph.ts)** — gated on scaling-coefficient shape, splits a compound claim into two children (`<id>-pa`/`-pb`, stable ids) with per-role metric labels; parent span/dataset/ownership inherited; **idempotent** (children pass through). Wired into the extract pipeline AND both store entry points (`finalizeExtraction`, `hydrateSession`) so pre-fix IndexedDB sessions split on refresh. `claimScalingRole` prefers the metric label so a child whose text still narrates both coefficients isn't ambiguous.
+- **`mineScalingExponents` (mine.ts)** — deterministic patterns for the actual forms: Kaplan `N∝Cmin0.73`/`pN=0.73` (param), `D∼C0.27`/`pD=0.27` (data); Chinchilla `we find that a=0.50 and b=0.50` (splits to two claims). Batch/steps/loss exponents (`B∝C^0.24`, `S∝C^0.03`, `L∝C^-0.05`) never match; **citation-bearing sentences ("et al.", year-in-parens) are skipped** so Chinchilla's Table-2 Kaplan row can't leak in as own.
+- **Mining decoupled from the LLM chunk budget** — it's regex, so it now runs over **every section**; the coefficient-bearing sections ("Summary of Scaling Laws", "Approach 1…", "IsoFLOP profiles") didn't match the priority filter and would have been invisible at `EXTRACT_MAX_CHUNKS=3`. Those headings (`summary|scaling|power law|optimal|approach|frontier`) were also added to the priority filter so the LLM tier sees them too.
+- **Scaling-aware dedup** — same role + same value = one node, however the corpus slot was filled (a mined `a=0.50` collapses with the split C4 child).
+- **`cleanText` strips zero-width chars** (ar5iv `No​p​t` = `N o ZWSP p ZWSP t`) — was breaking both pattern matching and span grounding.
+
+**Verified** (`eval/scaling-e2e.ts`, 15 checks, offline on the frozen real texts): Kaplan 0.73/0.27 mined from its own text; Chinchilla 0.50/0.49/0.46 + 0.50/0.51/0.54 mined; cited 0.73 never mined; 3 compound UI claims → 6 children (cited ones stay own=false, zero edges); splitter idempotent; **8 candidate edges** with the headline **0.73 ↔ 0.50 param-exponent pair**, roles never cross. Pipeline sanity with the LLM fully starved (raw=0 on every chunk): **6 edges from the deterministic layer alone, in 0.0 s** — extraction can no longer zero out the demo.
+
 ## Extract latency, part 2: it's throughput, not a bug (session 3 cont.)
 
 A 651 s extract call *with warmup working* (`ollama ps` = resident/Forever, warm ✓ badge, warmup 18 s then <2 s) is the **designed sequential cost**: 2 papers × up to 6 chunks × 40–90 s per e4b chunk, plus 120 s + a Gemini attempt for any timed-out chunk. There is no retry loop (escalation fires at most once per starved chunk) and no cold start left. Levers shipped:

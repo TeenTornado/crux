@@ -12,6 +12,10 @@
 export function cleanText(input: string): string {
   let x = input;
 
+  // 0. Zero-width chars (ar5iv math spacing, e.g. `No​p​t` for N_opt)
+  //    break pattern matching and span grounding — strip them globally.
+  x = x.replace(/[\u200B-\u200D\uFEFF]/g, "");
+
   // 1. Collapse ar5iv `\%` expansion artifacts BEFORE touching backslashes.
   //    Single value: `6.7%percent6.76.7\%` → `6.7%`.
   x = x.replace(/(\d+(?:\.\d+)?)\s*%?\s*percent\s*\1\s*\1\s*\\?%/g, "$1%");

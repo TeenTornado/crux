@@ -10,7 +10,7 @@ import type {
   ExtractSource,
 } from "./types";
 import type { ChatTurn, Session } from "./db";
-import { buildCandidateEdges } from "./graph";
+import { buildCandidateEdges, splitCompoundCoefficients } from "./graph";
 import { buildDemoState } from "./demoData";
 import { savePrefs, type Prefs } from "./prefs";
 
@@ -163,7 +163,9 @@ export const useStore = create<AppState>((set, get) => ({
       entered: true,
       source: session.source,
       papers: session.papers,
-      claims: session.claims,
+      // Split compound scaling claims persisted before the one-node-per-
+      // coefficient change, so old sessions can pair without re-extracting.
+      claims: splitCompoundCoefficients(session.claims),
       edges: session.edges,
       experiments,
       phase: session.edges.some((e) => e.reconciliation)
@@ -243,7 +245,10 @@ export const useStore = create<AppState>((set, get) => ({
     ),
   addClaim: (c) => set((st) => ({ claims: [...st.claims, c] })),
 
-  finalizeExtraction: (papers, claims) => {
+  finalizeExtraction: (papers, rawClaims) => {
+    // One node per coefficient (server already splits; this covers demo/live
+    // streams and any path that bypassed the extract pipeline).
+    const claims = splitCompoundCoefficients(rawClaims);
     const edges = buildCandidateEdges(claims);
     set({ papers, claims, edges, phase: "extracted" });
   },

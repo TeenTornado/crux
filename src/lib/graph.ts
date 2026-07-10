@@ -73,9 +73,11 @@ export function scalingRole(s: string): "param-exponent" | "data-exponent" | "" 
   return "";
 }
 
-/** Role for a full claim (reads metric + text, where the equation lives). */
+/** Role for a full claim. An explicit metric label wins (a split-coefficient
+ * claim's text still narrates BOTH coefficients, which reads as ambiguous);
+ * otherwise fall back to metric+text, where the equation usually lives. */
 export function claimScalingRole(c: Pick<Claim, "metric" | "claim_text">): string {
-  return scalingRole(`${c.metric} ${c.claim_text}`);
+  return scalingRole(c.metric || "") || scalingRole(`${c.metric} ${c.claim_text}`);
 }
 
 export function groupKey(c: Claim): string {
@@ -83,6 +85,53 @@ export function groupKey(c: Claim): string {
   const role = claimScalingRole(c);
   if (role) return `scaling law · ${role}`;
   return [canonTask(c.task), canonDataset(c.dataset), canonMetric(c.metric)].join(" · ");
+}
+
+// ── Compound-coefficient split ───────────────────────────────────────────────
+// LLM extraction bundles both exponents into ONE claim ("For C4, the
+// coefficient a is 0.50 and the coefficient b is 0.50" → value "0.50, 0.50").
+// The graph needs one node per coefficient or a=0.73 can never pair with
+// a=0.50. Split is gated on the claim being scaling-coefficient shaped (the
+// model's own metric label says so, or the text carries the power-law form),
+// so benchmark claims are never touched. Children keep the parent's span,
+// dataset, paper and ownership; ids are deterministic (`<id>-pa`/`-pb`) so
+// hydration and edge-building agree across runs.
+const COMPOUND_COEFF =
+  /(?:coefficient|exponent)?\s*\ba\b[^.;]{0,24}?(?:is|=|of)\s*(0?\.\d+)[^.;]{0,60}?\band\b[^.;]{0,24}?(?:coefficient|exponent)?\s*\bb\b[^.;]{0,24}?(?:is|=|of)\s*(0?\.\d+)/i;
+
+const SPLIT_METRIC = {
+  param: "param scaling exponent a (N_opt ∝ C^a)",
+  data: "data scaling exponent b (D_opt ∝ C^b)",
+} as const;
+
+export function splitCompoundCoefficients(claims: Claim[]): Claim[] {
+  const out: Claim[] = [];
+  for (const c of claims) {
+    // Idempotent: children (already per-coefficient) pass through untouched —
+    // finalizeExtraction AND hydrateSession both run this.
+    if (c.metric === SPLIT_METRIC.param || c.metric === SPLIT_METRIC.data) {
+      out.push(c);
+      continue;
+    }
+    const shaped =
+      /scaling coefficient|scaling exponent/i.test(c.metric || "") ||
+      scalingRole(`${c.metric} ${c.claim_text}`) !== "";
+    const m = shaped ? (c.claim_text || "").match(COMPOUND_COEFF) : null;
+    if (!m) {
+      out.push(c);
+      continue;
+    }
+    const [, a, b] = m;
+    const mk = (suffix: "pa" | "pb", role: "param" | "data", value: string): Claim => ({
+      ...c,
+      claim_id: `${c.claim_id}-${suffix}`,
+      metric: SPLIT_METRIC[role],
+      result_value: value,
+      claim_text: `${c.claim_text} [${role === "param" ? "a" : "b"} = ${value}]`,
+    });
+    out.push(mk("pa", "param", a), mk("pb", "data", b));
+  }
+  return out;
 }
 
 /** Fold task naming so "image classification" / "classification" / "recognition" group. */

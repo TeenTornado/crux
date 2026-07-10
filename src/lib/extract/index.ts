@@ -2,8 +2,13 @@ import { createHash } from "node:crypto";
 import { generate, extractJson, MODELS, hasKey } from "../gemini";
 import { chunkExtractionPrompt } from "../prompts";
 import { isGrounded, valueInSource, numericCore } from "./ground";
-import { mineResults } from "./mine";
-import { canonDataset, canonMetric } from "../graph";
+import { mineResults, mineScalingExponents } from "./mine";
+import {
+  canonDataset,
+  canonMetric,
+  splitCompoundCoefficients,
+  claimScalingRole,
+} from "../graph";
 import {
   OLLAMA_HOST,
   OLLAMA_MODEL,
@@ -118,7 +123,7 @@ const emptyConditions = (other: string | null): Conditions => ({
 });
 
 const PRIORITY_SECTION =
-  /result|experiment|evaluation|benchmark|comparison|ablation|table|main|abstract|discussion|conclusion/i;
+  /result|experiment|evaluation|benchmark|comparison|ablation|table|main|abstract|discussion|conclusion|summary|scaling|power law|optimal|approach|frontier/i;
 
 /** Section-aware chunks, results/experiments first, long sections split. In
  * "priority" mode the non-priority (Methods/Intro/Related) sections are dropped
@@ -333,12 +338,18 @@ function dedup(claims: Claim[], system: string): Claim[] {
   const seen = new Set<string>();
   const out: Claim[] = [];
   for (const c of claims) {
+    // Scaling-law claims: same coefficient role + same value = same finding,
+    // regardless of how the corpus slot was filled (a mined headline a=0.73
+    // collapses with the LLM's phrasing of it) — one node per coefficient.
+    const role = claimScalingRole(c);
     // A grounded value is the strongest identity (folds "error rate 3.57%" and
     // "top-5 error 3.57%"); value-less claims fall back to the self-reference-
     // normalized text so "we …" and "<method> …" phrasings collapse (Fix 3).
     const tail =
       numericCore(c.result_value) || dedupSignature(c.claim_text, system);
-    const key = `${canonDataset(c.dataset)}|${canonMetric(c.metric)}|${tail}`.toLowerCase();
+    const key = role
+      ? `scaling|${role}|${tail}`.toLowerCase()
+      : `${canonDataset(c.dataset)}|${canonMetric(c.metric)}|${tail}`.toLowerCase();
     if (seen.has(key)) continue;
     seen.add(key);
     out.push(c);
@@ -444,11 +455,7 @@ export async function extractClaims(
       }
     }
     if (chunkFailed && grounded.length === 0) stats.degraded = true;
-    // Deterministic pattern safety net: catch headline numbers the LLM tier
-    // missed (span/value grounded by construction, own-results only).
-    const mined = mineResults(ch.text, input.paperId, primaryTier);
-    stats.mined += mined.length;
-    all.push(...grounded, ...mined);
+    all.push(...grounded);
     opts.onProgress?.({
       done: ++done,
       total: chunks.length,
@@ -457,9 +464,24 @@ export async function extractClaims(
     });
   }
 
+  // Deterministic pattern safety net — regex only, no model call, so it runs
+  // over EVERY section regardless of the LLM chunk budget (a headline buried
+  // past MAX_CHUNKS is still caught). Covers benchmark errors AND scaling-law
+  // exponents (one claim per coefficient); own-results only.
+  for (const s of input.sections) {
+    const mined = [
+      ...mineResults(s.text, input.paperId, primaryTier),
+      ...mineScalingExponents(s.text, input.paperId, primaryTier),
+    ];
+    stats.mined += mined.length;
+    all.push(...mined);
+  }
+
   const system = paperSystemName(all, input.title);
   reconcileOwnership(all, system); // fix over-flagged own results before edges
-  const claims = dedup(all, system);
+  // One node per coefficient: split compound scaling claims BEFORE dedup so a
+  // split child and a mined twin (same role+value) collapse to one claim.
+  const claims = dedup(splitCompoundCoefficients(all), system);
   stats.grounded = claims.length;
   stats.ms = Date.now() - t0;
   const result = { claims, tier: primaryTier, stats };

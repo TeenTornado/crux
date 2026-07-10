@@ -67,8 +67,10 @@ export function hardGuard(a: AdjClaim, b: AdjClaim): ContraReason | null {
   // a CONDITION for the adjudicator to weigh, not an identity mismatch. Both
   // sides must confidently detect the same role; anything else falls through
   // to the normal benchmark guards.
-  const roleA = scalingRole(`${a.metric || ""} ${a.claim_text || ""}`);
-  const roleB = scalingRole(`${b.metric || ""} ${b.claim_text || ""}`);
+  const roleA =
+    scalingRole(a.metric || "") || scalingRole(`${a.metric || ""} ${a.claim_text || ""}`);
+  const roleB =
+    scalingRole(b.metric || "") || scalingRole(`${b.metric || ""} ${b.claim_text || ""}`);
   if (roleA && roleA === roleB) return null;
   if (canonMetric(a.metric || "") !== canonMetric(b.metric || "")) return "different_metric";
   if (canonDataset(a.dataset || "") !== canonDataset(b.dataset || "")) return "not_comparable";
