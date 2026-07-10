@@ -1,6 +1,7 @@
 "use client";
 
 import { useStore } from "@/lib/store";
+import { AgentState } from "./AgentState";
 import { DetailPanel } from "./DetailPanel";
 import { AskPanel } from "./AskPanel";
 import { PanelRightClose, ChevronLeft, Layers, MessageSquare } from "lucide-react";
@@ -72,6 +73,9 @@ export function RightSidebar() {
           <PanelRightClose size={16} />
         </button>
       </div>
+
+      {/* Agent state — the visible sense-decide-act-check surface (both tabs) */}
+      <AgentState />
 
       {/* Active tab content */}
       <div className="min-h-0 flex-1">
