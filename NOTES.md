@@ -8,10 +8,10 @@ All four builds shipped, each a separate commit (author: Sreeram Kumar V R), pus
 
 | Build | Commit | Smoke result |
 |---|---|---|
-| 1 — `RECONCILE_BACKEND=local` + engine badge on verdicts | `1275c70` | `eval/localmode-check.ts`: adjudication fully on-device (`gemma:gemma4:e4b`), **zero non-localhost fetches** under a fetch guard simulating dead WiFi; hard-guard path unaffected |
-| 2 — experiment generation via local Gemma | `dcd6da5` | `eval/localexp-check.ts`: actual route handler, POPPER plan on-device in **22.3s** (H0/H1/manipulation/discriminating metric all present), zero cloud fetches; timeout/malformed falls to the honest `template` label |
-| 3 — local retry with expanded boundary | `ac759bd` | `eval/retry-check.ts`: starved chunk fires exactly one local retry, streams `Retrying chunk 1/1 (Results)…` then the honest `deferred` status, zero hallucinated claims, fully local. **Real bug found & fixed**: `++done` sat inside `onProgress?.()`, whose args are skipped when no callback is passed — chunk numbering could stall |
-| 4 — header cleanup, collapsible left sidebar, mobile | `032d1cb` | tsc clean; dev compiles + serves; headless-Chrome shots at 1440/1024/423 of `/app` |
+| 1 — `RECONCILE_BACKEND=local` + engine badge on verdicts | `86fc3a8` | `eval/localmode-check.ts`: adjudication fully on-device (`gemma:gemma4:e4b`), **zero non-localhost fetches** under a fetch guard simulating dead WiFi; hard-guard path unaffected |
+| 2 — experiment generation via local Gemma | `b4b5eb6` | `eval/localexp-check.ts`: actual route handler, POPPER plan on-device in **22.3s** (H0/H1/manipulation/discriminating metric all present), zero cloud fetches; timeout/malformed falls to the honest `template` label |
+| 3 — local retry with expanded boundary | `974574f` | `eval/retry-check.ts`: starved chunk fires exactly one local retry, streams `Retrying chunk 1/1 (Results)…` then the honest `deferred` status, zero hallucinated claims, fully local. **Real bug found & fixed**: `++done` sat inside `onProgress?.()`, whose args are skipped when no callback is passed — chunk numbering could stall |
+| 4 — header cleanup, collapsible left sidebar, mobile | `5a7271b` | tsc clean; dev compiles + serves; headless-Chrome shots at 1440/1024/423 of `/app` |
 
 Env added to `.env.local` (active — dev server was restarted and re-verified):
 
@@ -48,7 +48,7 @@ Against the freshly restarted dev server with the env above:
 
 ### Session end state
 
-- `git status` clean · `main` = `origin/main` @ `032d1cb`
+- `git status` clean · `main` = `origin/main` @ `5a7271b`
 - All eval checks green: localmode, localexp, retry, scaling-e2e, scaling-check, mine, fix1, fix3, keepalive, phase5, clean-unit
 - Dev server stopped (boot: `npm run dev`) · model warm, `keep_alive:-1`
 
