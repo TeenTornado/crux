@@ -1,5 +1,7 @@
 "use client";
 
+import { useState } from "react";
+import { ChevronDown } from "lucide-react";
 import { useStore } from "@/lib/store";
 import type { CandidateEdge } from "@/lib/types";
 
@@ -18,6 +20,7 @@ const edgeLabel = (e: CandidateEdge) =>
   `${e.dataset || e.task || "pair"} · ${e.metric}`.slice(0, 46);
 
 export function AgentState() {
+  const [open, setOpen] = useState(false); // minimized by default
   const question = useStore((s) => s.question);
   const phase = useStore((s) => s.phase);
   const status = useStore((s) => s.statusMessage);
@@ -95,23 +98,45 @@ export function AgentState() {
       : "State a hypothesis to investigate");
 
   return (
-    <div className="mx-2 mt-2 rounded-lg border border-ink-600/70 bg-ink-800/60 px-3 py-2.5">
-      <div className="mb-2 flex items-center gap-1.5">
+    <div className="mx-2 mt-2 rounded-lg border border-ink-600/70 bg-ink-800/60 px-3 py-2">
+      {/* Minimized by default — the header row stays glanceable, click expands */}
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className="flex w-full items-center gap-1.5 py-0.5 text-left"
+        aria-expanded={open}
+        aria-label="Toggle agent state"
+      >
         <span
-          className={`h-1.5 w-1.5 rounded-full ${
+          className={`h-1.5 w-1.5 shrink-0 rounded-full ${
             busy ? "animate-pulse bg-gold" : reconciled.length ? "bg-sage" : "bg-ink-500"
           }`}
         />
         <span className="font-mono text-[9px] uppercase tracking-[0.2em] text-paper-faint">
           Agent state
         </span>
+        {!open && (
+          <span className="ml-1 truncate font-mono text-[9.5px] text-paper-dim">
+            {progress.total > 0 && `${progress.done}/${progress.total}`}
+            {review.length > 0 && (
+              <span className="text-rust-soft"> · {review.length} handoff</span>
+            )}
+          </span>
+        )}
         {source === "gemma-on-device" && (
           <span className="ml-auto font-mono text-[8.5px] uppercase tracking-wide text-sage-soft">
             on-device
           </span>
         )}
-      </div>
+        <ChevronDown
+          size={12}
+          className={`shrink-0 text-paper-faint transition-transform ${
+            open ? "rotate-180" : ""
+          } ${source === "gemma-on-device" ? "ml-1" : "ml-auto"}`}
+        />
+      </button>
 
+      {open && (
+        <div className="mt-1.5">
       <Row label="Goal">
         <span className="text-paper">{goal.slice(0, 90)}</span>
       </Row>
@@ -162,6 +187,8 @@ export function AgentState() {
             {review.length === 1 ? "s" : ""} your judgment
           </span>
         </Row>
+      )}
+        </div>
       )}
     </div>
   );
