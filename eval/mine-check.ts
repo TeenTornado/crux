@@ -39,6 +39,24 @@ const d = mineResults(
 );
 ok(d.length === 0, "comparison sentence is skipped (no competitor number leaks in)");
 
+// 4b. accuracy phrasings (the SparseViT demo shapes)
+const acc1 = mineResults("Across 5 seeds we obtain 82.9±0.15 top-1, matching the released config.", "c", "gemma-on-device");
+ok(acc1.some((c) => c.result_value.startsWith("82.9") && c.metric === "top-1 accuracy"),
+  "'we obtain 82.9±0.15 top-1' mined as top-1 accuracy");
+const acc2 = mineResults("We train for 300 epochs; our model reaches 84.2 top-1 on ImageNet-1k.", "a", "gemma-on-device");
+ok(acc2.some((c) => c.result_value.startsWith("84.2") && c.dataset === "ImageNet"),
+  "'reaches 84.2 top-1 on ImageNet-1k' mined with dataset");
+const acc3 = mineResults("GoogLeNet achieves 76.3% top-1 accuracy.", "a", "gemma-on-device");
+ok(acc3.length === 0, "competitor accuracy sentence (no own-signal) not mined");
+const acc4 = mineResults(
+  "Table 2. SparseViT-B reaches 84.2 top-1 on ImageNet-1k (300 ep, 224px), a +1.1 gain over ViT-B at matched FLOPs.",
+  "a", "gemma-on-device"
+);
+ok(acc4.some((c) => c.result_value.startsWith("84.2") && c.dataset === "ImageNet"),
+  "own table-caption prose ('Table 2. … 84.2 top-1') is mined");
+const acc5 = mineResults("Table 7. Comparison with the state of the art.", "a", "gemma-on-device");
+ok(acc5.length === 0, "comparison table caption still refused");
+
 // 5. table rows (no metric+value adjacency) → NOT mined
 const e = mineResults("E | 256 | 256 | 27.3 | 9.0", "vgg", "gemma-on-device");
 ok(e.length === 0, "table rows are not mined (no 'N% <metric> error' adjacency)");

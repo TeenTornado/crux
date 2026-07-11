@@ -21,7 +21,12 @@ const emptyConditions = (): Conditions => ({
 });
 
 // A sentence states the PAPER's own result …
-const OWN_SIGNAL = /\b(we|our|us|configuration\s+[a-e]|config\.?\s+[a-e]|model\s+[a-e])\b/i;
+// "Table N." caption prose in a paper's own results section states the paper's
+// own result by convention ("Table 2. SparseViT-B reaches 84.2 top-1 …");
+// competitor numbers arrive as table ROWS (split into cells above), and
+// comparison/citation sentences are still refused by the guards below.
+const OWN_SIGNAL =
+  /\b(we|our|us|configuration\s+[a-e]|config\.?\s+[a-e]|model\s+[a-e])\b|^table\s+\d+[.:]/i;
 // … and is NOT a comparison against another system (where a nearby number would
 // belong to that other system).
 const COMPARE_SIGNAL =
@@ -33,11 +38,19 @@ const PATTERNS: { re: RegExp; metric: string }[] = [
   { re: /(\d+(?:\.\d+)?)\s*%\s*(?:top-?5|test|classification)\s*error/gi, metric: "top-5 error" },
   { re: /top-?1\s*(?:test|validation|val\.?)?\s*error(?:\s*rate)?\s*(?:of|:|=|is|was|to)?\s*(\d+(?:\.\d+)?)\s*%/gi, metric: "top-1 error" },
   { re: /(\d+(?:\.\d+)?)\s*%\s*top-?1\s*error/gi, metric: "top-1 error" },
+  // Accuracy phrasing — "84.2% top-1 accuracy", "we obtain 82.9±0.15 top-1",
+  // "reaches 84.2 top-1" (top-k accuracy is often written without the % sign).
+  { re: /top-?1\s*accuracy\s*(?:of|=|:|is|was|reaches)?\s*(\d{1,2}(?:\.\d+)?)\s*%?/gi, metric: "top-1 accuracy" },
+  { re: /(\d{1,2}(?:\.\d+)?)\s*(?:±\s*[\d.]+\s*)?%?\s*top-?1(?:\s*accuracy)?\b(?!\s*error)/gi, metric: "top-1 accuracy" },
+  { re: /(\d{1,2}(?:\.\d+)?)\s*(?:±\s*[\d.]+\s*)?%?\s*top-?5\s*accuracy\b/gi, metric: "top-5 accuracy" },
 ];
 
 function sentences(text: string): string[] {
+  // "Table 2. X reaches…" must stay ONE sentence (the caption prose own-signal
+  // depends on it) — normalize the caption period before splitting.
   // `|` splits table rows into cells so gating applies per cell.
   return text
+    .replace(/\b(Table\s+\d+)\.\s+/gi, "$1: ")
     .split(/(?<=[.!?])\s+|\n+|\s\|\s/)
     .map((s) => s.trim())
     .filter((s) => s.length > 5);
