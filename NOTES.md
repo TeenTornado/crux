@@ -1,5 +1,20 @@
 # Crux — overnight session notes
 
+## Session: Sat 11 Jul (pre-submission) — audit-driven unfreeze, 2 changes
+
+Brief unfreeze for the two Section-4A audit items; re-frozen after. Both pushed:
+
+| Change | Commit | Verification |
+|---|---|---|
+| 1 — Verify-live routed through the **gated v2 cascade** (was ungated legacy v1 = audit weakness #1) | `1662613` | `eval/verifylive-check.ts` invokes the real route: every live claim `grounded===true`, retry beats streamed, source reports true tier (`gemma-on-device`); curated per-paper fallback preserved |
+| 2 — **Agent acts on its NEXT queue**: after reconciliation it auto-designs the experiment for the highest-confidence genuine contradiction (visible toast + status + auto-opened panel + 'Acted ⚡' row); defers to human on low-confidence pairs; reports review when nothing is falsifiable; once-per-run by construction | `d8ed0db` | `eval/agent-act-check.ts` (7 checks) + full regression sweep green; goes through the same /api/experiment path, so Local Mode = on-device Gemma |
+
+Still held **uncommitted** (per the freeze): mobile-feedback fixes (AppSidebar rail-hide + graph fit), Electron wrapper (`electron/`, `desktop-server` staging, `dist-electron/Crux-0.1.0-arm64.dmg` built+smoke-tested), `DOCUMENTATION.md`, `next.config.mjs` standalone, package.json electron scripts. `git status` shows exactly those 9 paths.
+
+Judge-facing effect of Change 2: the loop is now sense → decide → **act** → check with the handoff boundary intact — the panel shows the act ('⚡ auto-designed experiment · …') the moment reconciliation completes.
+
+---
+
 ## Session: Fri 10 Jul (overnight) — Track 1 gap-closing + UI (Builds 1–4)
 
 All four builds shipped, each a separate commit (author: Sreeram Kumar V R), pushed to `origin/main`. Working tree clean. **Boot with `npm run dev`** (dev server stopped so your own start doesn't hit a busy port).
