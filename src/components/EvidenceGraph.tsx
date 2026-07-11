@@ -119,14 +119,18 @@ export function EvidenceGraph() {
     );
   }
 
+  // Mobile: tighter fit padding + deeper min-zoom so a 3-paper graph actually
+  // fits a 375px screen; pinch-zoom replaces the +/- controls.
+  const mobile = typeof window !== "undefined" && window.innerWidth < 1024;
+
   return (
     <ReactFlow
       nodes={nodes}
       edges={rfEdges}
       nodeTypes={nodeTypes}
       fitView
-      fitViewOptions={{ padding: 0.24, maxZoom: 1.1 }}
-      minZoom={0.3}
+      fitViewOptions={{ padding: mobile ? 0.05 : 0.24, maxZoom: mobile ? 0.9 : 1.1 }}
+      minZoom={mobile ? 0.15 : 0.3}
       maxZoom={1.8}
       proOptions={{ hideAttribution: true }}
       onNodeClick={(_, n) => selectClaim(n.id)}
@@ -139,7 +143,7 @@ export function EvidenceGraph() {
       edgesFocusable
     >
       <Background variant={BackgroundVariant.Dots} gap={26} size={1} color="#222b32" />
-      <Controls showInteractive={false} position="bottom-right" />
+      <Controls showInteractive={false} position="bottom-right" className="!hidden lg:!flex" />
     </ReactFlow>
   );
 }

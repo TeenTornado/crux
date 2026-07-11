@@ -87,13 +87,13 @@ export function AppSidebar() {
   return (
     <div className="relative z-40 h-full shrink-0">
       {/* Rail */}
-      <div className="flex h-full w-[58px] flex-col items-center border-r border-paper/10 py-3">
+      <div className="hidden h-full w-[58px] flex-col items-center border-r border-paper/10 py-3 lg:flex">
         <Link
           href="/"
           className="mb-3 flex h-8 w-8 items-center justify-center rounded-lg border border-gold-dim/50 bg-gold/10 transition-colors hover:bg-gold/20"
           title="Crux home"
         >
-          <span className="font-serif text-[15px] font-semibold text-gold-soft">C</span>
+          <img src="/Crux_Logo.png" alt="Crux" className="h-full w-full scale-[1.6] object-contain" />
         </Link>
         <RailBtn icon={<PanelLeft size={17} />} onClick={toggle} active={open} title="Toggle sidebar (⌘B)" />
         <RailBtn icon={<Plus size={18} />} onClick={goNew} title="New chat" />
@@ -107,19 +107,32 @@ export function AppSidebar() {
         </div>
       </div>
 
+      {/* Mobile: the rail is hidden — a floating thumb-zone button opens the
+          chat drawer; everything else gets the full viewport width. */}
+      {!open && (
+        <button
+          onClick={toggle}
+          className="fixed bottom-[max(0.75rem,env(safe-area-inset-bottom))] left-3 z-[45] flex h-11 w-11 items-center justify-center rounded-xl border border-ink-500 bg-ink-800/95 text-paper-dim shadow-[0_10px_30px_-10px_rgba(0,0,0,0.7)] backdrop-blur transition-colors hover:text-paper lg:hidden"
+          aria-label="Open chats"
+          title="Chats"
+        >
+          <PanelLeft size={18} />
+        </button>
+      )}
+
       {/* Expandable drawer */}
       <AnimatePresence>
         {open && (
           <>
             <motion.div
-              className="fixed inset-y-0 left-[58px] right-0 z-30 bg-ink-900/40"
+              className="fixed inset-y-0 left-0 right-0 z-30 bg-ink-900/55 lg:left-[58px] lg:bg-ink-900/40"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               onClick={toggle}
             />
             <motion.aside
-              className="absolute left-[58px] top-0 z-40 flex h-full w-[272px] flex-col border-r border-paper/10 bg-ink-800 shadow-[24px_0_60px_-30px_rgba(0,0,0,0.7)]"
+              className="fixed left-0 top-0 z-40 flex h-full w-[280px] flex-col border-r border-paper/10 bg-ink-800 pb-[env(safe-area-inset-bottom)] shadow-[24px_0_60px_-30px_rgba(0,0,0,0.7)] lg:absolute lg:left-[58px] lg:w-[272px] lg:pb-0"
               initial={{ x: -18, opacity: 0 }}
               animate={{ x: 0, opacity: 1 }}
               exit={{ x: -18, opacity: 0 }}

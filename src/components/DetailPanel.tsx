@@ -63,7 +63,7 @@ function Overview() {
   };
 
   return (
-    <div className="flex h-full flex-col overflow-y-auto p-5">
+    <div className="flex h-full flex-col overflow-y-auto p-4 lg:p-5">
       <div className="mb-1 font-serif text-lg text-paper">Evidence overview</div>
       <p className="mb-5 text-[12px] leading-relaxed text-paper-faint">
         Select a node to inspect a claim and its source provenance, or a{" "}
@@ -163,7 +163,7 @@ function ClaimDetail({ claim }: { claim: Claim }) {
   ][];
 
   return (
-    <div className="flex h-full flex-col overflow-y-auto p-5">
+    <div className="flex h-full flex-col overflow-y-auto p-4 lg:p-5">
       <div className="mb-3 flex items-center justify-between">
         <div className="flex items-center gap-2">
           <BookOpen size={14} className="text-paper-faint" />
@@ -296,7 +296,7 @@ function EdgeDetail({ edge }: { edge: CandidateEdge }) {
   };
 
   return (
-    <div className="flex h-full flex-col overflow-y-auto p-5">
+    <div className="flex h-full flex-col overflow-y-auto p-4 lg:p-5">
       <div className="mb-3 flex items-center justify-between">
         <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-paper-faint">
           Reconciliation
