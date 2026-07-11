@@ -65,7 +65,7 @@ export function ConversationOverlay() {
           <div className="flex items-center justify-between border-b border-paper/10 px-5 py-3">
             <div className="flex items-center gap-2.5">
               <div className="flex h-7 w-7 items-center justify-center rounded-lg border border-gold-dim/50 bg-gold/10">
-                <span className="font-serif text-[13px] font-semibold text-gold-soft">C</span>
+                <img src="/Crux_Logo.png" alt="" className="h-full w-full scale-[1.6] object-contain" />
               </div>
               <div>
                 <div className="font-serif text-[14px] text-paper">{sessionName}</div>

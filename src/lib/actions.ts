@@ -32,19 +32,26 @@ export async function runExtraction(opts: {
   s.reset();
   s.setPhase("extracting");
   s.setStatus("Starting extraction…");
+  s.startAgentRun();
+  s.logAgent("sense · extraction started", { tone: "info" });
+  const tExtract = Date.now();
 
   const collectedPapers: any[] = [];
   const collectedClaims: Claim[] = [];
 
-  await streamExtract(opts, (ev) => {
+  await streamExtract({ ...opts, mode: s.computeMode }, (ev) => {
     const st = useStore.getState();
     switch (ev.type) {
       case "paper":
         collectedPapers.push(ev.paper);
         st.addPaper(ev.paper);
+        st.logAgent(`sense · paper ${ev.paper.handle} · ${ev.paper.title.slice(0, 44)}`);
         break;
       case "status":
         st.setStatus(ev.message);
+        // Surface recovery beats in the feed (retry / degrade / defer).
+        if (/retry|deferred|stalled|fallback/i.test(ev.message))
+          st.logAgent(`recover · ${ev.message.slice(0, 70)}`, { tone: "rust" });
         break;
       case "progress":
         st.setStatus(
@@ -52,6 +59,9 @@ export async function runExtraction(opts: {
             ev.ms ? ` · ${Math.round(ev.ms / 1000)}s` : ""
           }`
         );
+        st.logAgent(`sense · chunk ${ev.done}/${ev.total} · ${ev.heading.slice(0, 32)}`, {
+          ms: ev.ms,
+        });
         break;
       case "claim":
         collectedClaims.push(ev.claim);
@@ -62,6 +72,10 @@ export async function runExtraction(opts: {
         st.finalizeExtraction(ev.papers, ev.claims);
         st.setStatus(
           `${ev.claims.length} claims from ${ev.papers.length} papers`
+        );
+        st.logAgent(
+          `sense · ${ev.claims.length} claims grounded from ${ev.papers.length} papers`,
+          { tone: "sage", ms: Date.now() - tExtract }
         );
         break;
       case "error":
@@ -108,6 +122,8 @@ export async function runReconciliation() {
   s.setPhase("reconciling");
   const total = edges.length;
   s.setReconcileProgress(0, total);
+  s.logAgent(`decide · ${total} candidate pair${total === 1 ? "" : "s"} queued for adjudication`, { tone: "info" });
+  const tRecon = Date.now();
 
   const claimMap = new Map(s.claims.map((c) => [c.claim_id, c]));
 
@@ -120,20 +136,37 @@ export async function runReconciliation() {
     const isDemo = st.source === "demo";
     st.setEdgeReconciling(e.edge_id);
     st.setStatus(`Diagnosing conditions · pair ${i + 1} of ${total}…`);
+    const tPair = Date.now();
     await wait(isDemo ? 520 : 280); // let the animated edge register visually
     try {
+      let verdictR;
       if (isDemo && DEMO_RECONCILIATIONS[e.edge_id]) {
         // Curated demo path — instant, high-quality, no network.
-        useStore.getState().setReconciliation(
-          e.edge_id,
-          DEMO_RECONCILIATIONS[e.edge_id]
-        );
+        verdictR = DEMO_RECONCILIATIONS[e.edge_id];
+        useStore.getState().setReconciliation(e.edge_id, verdictR);
       } else {
-        const { reconciliation, engine } = await reconcile(a, b);
+        const { reconciliation, engine } = await reconcile(a, b, st.computeMode);
         // Keep the producing engine on the verdict so the UI can honestly
         // label "reconciled on-device · gemma4:e4b" vs Gemini vs guard.
-        useStore.getState().setReconciliation(e.edge_id, { ...reconciliation, engine });
+        verdictR = { ...reconciliation, engine };
+        useStore.getState().setReconciliation(e.edge_id, verdictR);
       }
+      const vShort =
+        verdictR.verdict === "GENUINE_CONTRADICTION"
+          ? "contradiction"
+          : verdictR.verdict === "CONTEXT_CONDITIONED_DIVERGENCE"
+          ? "divergence"
+          : "agreement";
+      useStore.getState().logAgent(
+        `check · ${(a.dataset || a.task || "pair").slice(0, 22)} · ${a.metric.slice(0, 26)} → ${vShort} · ${Math.round(
+          (verdictR.confidence ?? 0) * 100
+        )}%`,
+        {
+          tone:
+            vShort === "contradiction" ? "rust" : vShort === "divergence" ? "gold" : "sage",
+          ms: Date.now() - tPair,
+        }
+      );
     } catch {
       // leave as pending; keep going
     }
@@ -146,6 +179,10 @@ export async function runReconciliation() {
   done.setPhase("reconciled");
   done.setStatus("Reconciliation complete");
   const verdicts = done.edges.filter((e) => e.reconciliation).length;
+  done.logAgent(`check · reconciliation complete · ${verdicts}/${total} pairs`, {
+    tone: "sage",
+    ms: Date.now() - tRecon,
+  });
   logStep("reconcile", `${verdicts} pairs reconciled`);
   persistCurrentSession();
 
@@ -202,6 +239,7 @@ async function agentActOnNext() {
   if (act.kind === "experiment") {
     const label = edgeActLabel(act.edge);
     st.selectEdge(act.edge.edge_id); // auto-open the edge panel — the act is visible
+    st.logAgent(`⚡ decide → act · top contradiction selected · ${label.slice(0, 46)}`, { tone: "gold" });
     st.setStatus(`Agent → acting on NEXT: designing experiment · ${label}`);
     toast("⚡ Agent acted on NEXT queue — auto-designing the experiment for the top contradiction");
     const plan = await runExperiment(act.edge.edge_id);
@@ -214,21 +252,26 @@ async function agentActOnNext() {
       after.setLastAgentAction(`experiment design failed · ${label} — deferred to you`);
       after.setStatus("Agent: experiment design failed — your move");
     }
+    persistCurrentSession(); // snapshot includes the act's log entries
     return;
   }
 
   if (act.kind === "handoff") {
     const label = edgeActLabel(act.edge);
     st.selectEdge(act.edge.edge_id);
+    st.logAgent(`⚡ decide · low confidence — deferring to human · ${label.slice(0, 40)}`, { tone: "rust" });
     st.setLastAgentAction(`deferred to human · ${label} needs your judgment`);
     st.setStatus(`Agent → handing off: ${label} is low-confidence — your judgment needed`);
     toast("Agent defers to you — a low-confidence pair needs human review");
+    persistCurrentSession();
     return;
   }
 
   // No genuine contradictions and nothing flagged: the agent reports its review.
+  st.logAgent("⚡ decide · reviewed queue — no genuine contradictions to falsify", { tone: "info" });
   st.setLastAgentAction("reviewed queue — no genuine contradictions to falsify");
   st.setStatus("Agent: reviewed all pairs — divergences/agreements only, nothing to falsify");
+  persistCurrentSession();
 }
 
 /** Generate (or fetch cached) an experiment plan for a genuine contradiction. */
@@ -241,7 +284,9 @@ export async function runExperiment(edgeId: string) {
   // Demo corpus → resolve the curated POPPER plan instantly (no network), but
   // keep a short beat so the "designing…" state is visible.
   if (s.source === "demo" && DEMO_EXPERIMENTS[edgeId]) {
+    s.setAgentBusy({ label: "designing experiment · demo corpus", since: Date.now() });
     await wait(900);
+    useStore.getState().setAgentBusy(null);
     const plan = DEMO_EXPERIMENTS[edgeId];
     useStore.getState().setExperiment(edgeId, plan);
     logStep("experiment", plan.title);
@@ -252,16 +297,33 @@ export async function runExperiment(edgeId: string) {
   const a = s.claims.find((c) => c.claim_id === edge.source_claim_id);
   const b = s.claims.find((c) => c.claim_id === edge.target_claim_id);
   if (!a || !b) return null;
-  const { plan: rawPlan, engine } = await generateExperiment(
-    a,
-    b,
-    edge.reconciliation?.reasoning || "",
-    edgeId
-  );
+  const tExp = Date.now();
+  const actLabel = `${(edge.dataset || edge.task || "pair").slice(0, 30)} · ${edge.metric.slice(0, 28)}`;
+  s.logAgent(`act · designing experiment · ${actLabel}`, { tone: "gold" });
+  s.setAgentBusy({ label: `designing experiment · ${actLabel}`, since: Date.now() });
+  let rawPlan, engine;
+  try {
+    ({ plan: rawPlan, engine } = await generateExperiment(
+      a,
+      b,
+      edge.reconciliation?.reasoning || "",
+      edgeId,
+      s.computeMode
+    ));
+  } catch {
+    useStore.getState().logAgent(`act · experiment generation failed · ${actLabel}`, { tone: "rust" });
+    return null;
+  } finally {
+    useStore.getState().setAgentBusy(null);
+  }
   // Keep the producing engine on the plan: "generated on-device · gemma4:e4b"
   // vs Gemini vs deterministic template — never fake the provenance.
   const plan = { ...rawPlan, engine };
   useStore.getState().setExperiment(edgeId, plan);
+  useStore.getState().logAgent(
+    `act · experiment ready · "${plan.title.slice(0, 44)}" · ${String(engine).startsWith("gemma") ? "on-device" : engine}`,
+    { tone: "sage", ms: Date.now() - tExp }
+  );
   logStep("experiment", plan.title);
   persistExperiment(plan);
   return plan;
@@ -300,6 +362,12 @@ export async function sendChat(text: string) {
   const q = text.trim();
   const st = useStore.getState();
   if (!q || st.chatPending || !st.sessionId) return;
+  // Chat is a cloud tier (Gemini). In hard-Local mode we refuse rather than
+  // silently break the "nothing leaves the device" promise.
+  if (st.computeMode === "local") {
+    toast("Chat runs on Gemini (cloud) — switch mode to Auto or Cloud to use it");
+    return;
+  }
   const sessionId = st.sessionId;
 
   const userTurn = {

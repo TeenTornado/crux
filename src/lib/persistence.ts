@@ -71,6 +71,8 @@ export function persistCurrentSession() {
     claims: st.claims,
     edges: st.edges,
     question: st.question,
+    agent_log: st.agentLog,
+    run_started_at: st.runStartedAt,
   };
 
   debouncedWrite(`session:${id}`, () => {

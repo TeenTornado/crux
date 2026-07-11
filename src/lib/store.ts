@@ -12,7 +12,16 @@ import type {
 import type { ChatTurn, Session } from "./db";
 import { buildCandidateEdges, splitCompoundCoefficients } from "./graph";
 import { buildDemoState } from "./demoData";
-import { savePrefs, type Prefs } from "./prefs";
+import { savePrefs, type Prefs, type ComputeMode } from "./prefs";
+
+/** One step in the agent's visible activity feed (Ask tab). Transient. */
+export interface AgentLogEntry {
+  id: string;
+  ts: number;
+  text: string;
+  tone: "info" | "gold" | "sage" | "rust";
+  ms?: number; // measured duration of the step, when known
+}
 
 export type Phase =
   | "idle"
@@ -39,6 +48,11 @@ interface AppState extends UIState {
   experiments: Record<string, ExperimentPlan>;
   reconcileProgress: { done: number; total: number };
   judgeMode: boolean;
+  // The agent's step-by-step activity feed (Ask tab) + run clock
+  agentLog: AgentLogEntry[];
+  runStartedAt: number | null;
+  /** In-flight agent act (drives the generating animation in the feed). */
+  agentBusy: { label: string; since: number } | null;
   searchQuery: string;
   sourceViewClaimId: string | null;
 
@@ -51,6 +65,8 @@ interface AppState extends UIState {
   chatPending: boolean;
   entered: boolean; // false → show intro screen
 
+  // compute routing (mirrored to localStorage)
+  computeMode: ComputeMode;
   // sidebar UI (mirrored to localStorage)
   sidebarCollapsed: boolean;
   leftCollapsed: boolean; // workspace sources panel → rail
@@ -78,6 +94,7 @@ interface AppState extends UIState {
   setChatPending: (v: boolean) => void;
   setChatExpanded: (v: boolean) => void;
   applyPrefs: (p: Prefs) => void;
+  setComputeMode: (m: ComputeMode) => void;
   setSidebarCollapsed: (v: boolean) => void;
   toggleSidebar: () => void;
   setLeftCollapsed: (v: boolean) => void;
@@ -86,6 +103,9 @@ interface AppState extends UIState {
   setPhase: (p: Phase) => void;
   setStatus: (m: string) => void;
   setLastAgentAction: (a: string | null) => void;
+  startAgentRun: () => void;
+  logAgent: (text: string, opts?: { tone?: AgentLogEntry["tone"]; ms?: number }) => void;
+  setAgentBusy: (v: { label: string; since: number } | null) => void;
   setSource: (s: ExtractSource) => void;
   addPaper: (p: Paper) => void;
   addClaim: (c: Claim) => void;
@@ -118,6 +138,9 @@ export const useStore = create<AppState>((set, get) => ({
   experiments: {},
   reconcileProgress: { done: 0, total: 0 },
   judgeMode: false,
+  agentLog: [],
+  runStartedAt: null,
+  agentBusy: null,
   searchQuery: "",
   sourceViewClaimId: null,
 
@@ -128,6 +151,7 @@ export const useStore = create<AppState>((set, get) => ({
   chatStreaming: null,
   chatPending: false,
   entered: false,
+  computeMode: "auto",
   sidebarCollapsed: false,
   leftCollapsed: false,
   activeTab: "context",
@@ -144,6 +168,9 @@ export const useStore = create<AppState>((set, get) => ({
         : `session-${Date.now()}`;
     set({
       ...emptyUI,
+      agentLog: [],
+      runStartedAt: null,
+      agentBusy: null,
       sessionId: id,
       sessionName: opts?.name || "Untitled session",
       question: opts?.question || "",
@@ -164,6 +191,10 @@ export const useStore = create<AppState>((set, get) => ({
   hydrateSession: ({ session, chats, experiments }) =>
     set({
       ...emptyUI,
+      // Restore the agent's worklog with the session (busy flag never persists).
+      agentLog: session.agent_log ?? [],
+      runStartedAt: session.run_started_at ?? null,
+      agentBusy: null,
       sessionId: session.id,
       sessionName: session.name,
       question: session.question || "",
@@ -198,10 +229,15 @@ export const useStore = create<AppState>((set, get) => ({
 
   applyPrefs: (p) =>
     set({
+      computeMode: p.computeMode,
       sidebarCollapsed: p.sidebarCollapsed,
       leftCollapsed: p.leftCollapsed,
       activeTab: p.activeTab,
     }),
+  setComputeMode: (m) => {
+    savePrefs({ computeMode: m });
+    set({ computeMode: m });
+  },
   setSidebarCollapsed: (v) => {
     savePrefs({ sidebarCollapsed: v });
     set({ sidebarCollapsed: v });
@@ -228,6 +264,9 @@ export const useStore = create<AppState>((set, get) => ({
   reset: () =>
     set({
       ...emptyUI,
+      agentLog: [],
+      runStartedAt: null,
+      agentBusy: null,
       phase: "idle",
       source: null,
       statusMessage: "",
@@ -258,6 +297,21 @@ export const useStore = create<AppState>((set, get) => ({
   setPhase: (p) => set({ phase: p }),
   setStatus: (m) => set({ statusMessage: m }),
   setLastAgentAction: (a) => set({ lastAgentAction: a }),
+  startAgentRun: () => set({ agentLog: [], runStartedAt: Date.now(), agentBusy: null }),
+  setAgentBusy: (v) => set({ agentBusy: v }),
+  logAgent: (text, opts) =>
+    set((st) => ({
+      agentLog: [
+        ...st.agentLog.slice(-199), // cap the feed
+        {
+          id: `alog-${Date.now()}-${st.agentLog.length}`,
+          ts: Date.now(),
+          text,
+          tone: opts?.tone ?? "info",
+          ms: opts?.ms,
+        },
+      ],
+    })),
   setSource: (s) => set({ source: s }),
   addPaper: (p) =>
     set((st) =>

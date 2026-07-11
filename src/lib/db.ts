@@ -1,6 +1,7 @@
 "use client";
 
 import { openDB, type DBSchema, type IDBPDatabase } from "idb";
+import type { AgentLogEntry } from "./store";
 import type {
   Paper,
   Claim,
@@ -52,6 +53,9 @@ export interface Session {
   edges: CandidateEdge[];
   /** Reconciliations live on edges; kept denormalized for quick counters. */
   question?: string;
+  /** The agent's visible worklog (Ask tab run card) — survives refresh. */
+  agent_log?: AgentLogEntry[];
+  run_started_at?: number | null;
 }
 
 // ── Schema ───────────────────────────────────────────────────────────────────
