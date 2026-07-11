@@ -25,6 +25,8 @@ interface UIState {
   selectedClaimId: string | null;
   selectedEdgeId: string | null;
   hoveredSpanClaimId: string | null;
+  /** The agent's most recent autonomous act on the NEXT queue (Change 2). */
+  lastAgentAction: string | null;
 }
 
 interface AppState extends UIState {
@@ -83,6 +85,7 @@ interface AppState extends UIState {
   setActiveTab: (t: "context" | "ask") => void;
   setPhase: (p: Phase) => void;
   setStatus: (m: string) => void;
+  setLastAgentAction: (a: string | null) => void;
   setSource: (s: ExtractSource) => void;
   addPaper: (p: Paper) => void;
   addClaim: (c: Claim) => void;
@@ -101,6 +104,7 @@ const emptyUI: UIState = {
   selectedClaimId: null,
   selectedEdgeId: null,
   hoveredSpanClaimId: null,
+  lastAgentAction: null,
 };
 
 export const useStore = create<AppState>((set, get) => ({
@@ -253,6 +257,7 @@ export const useStore = create<AppState>((set, get) => ({
 
   setPhase: (p) => set({ phase: p }),
   setStatus: (m) => set({ statusMessage: m }),
+  setLastAgentAction: (a) => set({ lastAgentAction: a }),
   setSource: (s) => set({ source: s }),
   addPaper: (p) =>
     set((st) =>

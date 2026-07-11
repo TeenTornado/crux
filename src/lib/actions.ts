@@ -15,7 +15,8 @@ import {
   persistChatTurn,
   logStep,
 } from "./persistence";
-import type { Claim } from "./types";
+import { toast } from "./toast";
+import type { Claim, CandidateEdge, ExperimentPlan } from "./types";
 
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
@@ -147,6 +148,87 @@ export async function runReconciliation() {
   const verdicts = done.edges.filter((e) => e.reconciliation).length;
   logStep("reconcile", `${verdicts} pairs reconciled`);
   persistCurrentSession();
+
+  // Change 2 — close the decide→act gap: the agent executes the top of its
+  // NEXT queue once per reconciliation run (skip-if-already-experimented makes
+  // re-runs a no-op, so this can never runaway-fire).
+  await agentActOnNext();
+}
+
+const edgeActLabel = (e: CandidateEdge) =>
+  `${e.dataset || e.task || "pair"} · ${e.metric}`.slice(0, 60);
+
+/**
+ * The agent's decide step as a pure function: what should be done next, given
+ * the reconciled edges and existing experiments?
+ *  1. highest-confidence GENUINE_CONTRADICTION without an experiment → act
+ *  2. else a needs_human_review pair → defer to the human (the handoff boundary)
+ *  3. else reconciled edges exist → nothing to falsify; report the review
+ */
+export function pickAgentAction(
+  edges: CandidateEdge[],
+  experiments: Record<string, ExperimentPlan>
+):
+  | { kind: "experiment"; edge: CandidateEdge }
+  | { kind: "handoff"; edge: CandidateEdge }
+  | { kind: "review" }
+  | null {
+  const reconciled = edges.filter((e) => e.reconciliation);
+  if (reconciled.length === 0) return null;
+  const genuine = reconciled
+    .filter((e) => e.reconciliation!.verdict === "GENUINE_CONTRADICTION")
+    .sort(
+      (a, b) =>
+        (b.reconciliation?.confidence ?? 0) - (a.reconciliation?.confidence ?? 0)
+    );
+  const target = genuine.find((e) => !experiments[e.edge_id]);
+  if (target) return { kind: "experiment", edge: target };
+  const review = reconciled.find((e) => e.reconciliation!.needs_human_review);
+  if (review) return { kind: "handoff", edge: review };
+  return { kind: "review" };
+}
+
+/**
+ * Change 2 — the ACT step. High-confidence contradictions are acted on
+ * autonomously (experiment auto-designed, on-device in Local Mode via the same
+ * /api/experiment path); low-confidence pairs are explicitly deferred to the
+ * human. Either way the agent decides — and says so visibly.
+ */
+async function agentActOnNext() {
+  const st = useStore.getState();
+  const act = pickAgentAction(st.edges, st.experiments);
+  if (!act) return;
+
+  if (act.kind === "experiment") {
+    const label = edgeActLabel(act.edge);
+    st.selectEdge(act.edge.edge_id); // auto-open the edge panel — the act is visible
+    st.setStatus(`Agent → acting on NEXT: designing experiment · ${label}`);
+    toast("⚡ Agent acted on NEXT queue — auto-designing the experiment for the top contradiction");
+    const plan = await runExperiment(act.edge.edge_id);
+    const after = useStore.getState();
+    if (plan) {
+      after.setLastAgentAction(`auto-designed experiment · ${label}`);
+      after.setStatus(`Agent: experiment designed autonomously · ${plan.title.slice(0, 60)}`);
+      logStep("experiment", `agent auto-designed · ${label}`);
+    } else {
+      after.setLastAgentAction(`experiment design failed · ${label} — deferred to you`);
+      after.setStatus("Agent: experiment design failed — your move");
+    }
+    return;
+  }
+
+  if (act.kind === "handoff") {
+    const label = edgeActLabel(act.edge);
+    st.selectEdge(act.edge.edge_id);
+    st.setLastAgentAction(`deferred to human · ${label} needs your judgment`);
+    st.setStatus(`Agent → handing off: ${label} is low-confidence — your judgment needed`);
+    toast("Agent defers to you — a low-confidence pair needs human review");
+    return;
+  }
+
+  // No genuine contradictions and nothing flagged: the agent reports its review.
+  st.setLastAgentAction("reviewed queue — no genuine contradictions to falsify");
+  st.setStatus("Agent: reviewed all pairs — divergences/agreements only, nothing to falsify");
 }
 
 /** Generate (or fetch cached) an experiment plan for a genuine contradiction. */

@@ -30,6 +30,7 @@ export function AgentState() {
   const papers = useStore((s) => s.papers);
   const source = useStore((s) => s.source);
   const experiments = useStore((s) => s.experiments);
+  const lastAgentAction = useStore((s) => s.lastAgentAction);
 
   const reconciled = edges.filter((e) => e.reconciliation);
   const contradictions = reconciled.filter(
@@ -120,6 +121,7 @@ export function AgentState() {
             {review.length > 0 && (
               <span className="text-rust-soft"> · {review.length} handoff</span>
             )}
+            {lastAgentAction && <span className="text-gold-soft"> · ⚡acted</span>}
           </span>
         )}
         {source === "gemma-on-device" && (
@@ -179,6 +181,12 @@ export function AgentState() {
       <Row label="Next">
         <span className={nextTone}>{next}</span>
       </Row>
+
+      {lastAgentAction && (
+        <Row label="Acted">
+          <span className="text-gold-soft">⚡ {lastAgentAction}</span>
+        </Row>
+      )}
 
       {review.length > 0 && phase === "reconciled" && (
         <Row label="Handoff">
