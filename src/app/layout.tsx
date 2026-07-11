@@ -5,6 +5,10 @@ export const metadata: Metadata = {
   title: "Crux — find the crux of why papers disagree",
   description:
     "Crux extracts structured claims, diagnoses why papers disagree, and generates the experiment that would settle it.",
+  icons: {
+    icon: "/Crux_Logo.png",
+    apple: "/Crux_Logo.png",
+  },
 };
 
 // viewportFit:"cover" makes env(safe-area-inset-*) non-zero on notched

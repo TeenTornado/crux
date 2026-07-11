@@ -101,7 +101,7 @@ function PrepareOverlay({ show }: { show: boolean }) {
           >
             <div className="mb-5 flex items-center gap-2">
               <div className="flex h-8 w-8 items-center justify-center rounded-lg border border-gold-dim/50 bg-gold/10">
-                <span className="font-serif text-[15px] font-semibold text-gold-soft">C</span>
+                <img src="/Crux_Logo.png" alt="" className="h-full w-full scale-[1.6] object-contain" />
               </div>
               <span className="font-serif text-[17px] font-semibold text-paper">Crux</span>
             </div>
@@ -129,7 +129,7 @@ function Nav() {
       <div className="mx-auto flex max-w-6xl items-center justify-between px-5 py-3.5">
         <div className="flex items-center gap-2.5">
           <div className="flex h-8 w-8 items-center justify-center rounded-lg border border-gold-dim/50 bg-gold/10">
-            <span className="font-serif text-[16px] font-semibold text-gold-soft">C</span>
+            <img src="/Crux_Logo.png" alt="" className="h-full w-full scale-[1.6] object-contain" />
           </div>
           <span className="font-serif text-[18px] font-semibold tracking-tight text-paper">
             Crux
@@ -522,7 +522,7 @@ function Footer() {
           <div className="max-w-xs">
             <div className="flex items-center gap-2.5">
               <div className="flex h-8 w-8 items-center justify-center rounded-lg border border-gold-dim/50 bg-gold/10">
-                <span className="font-serif text-[15px] font-semibold text-gold-soft">C</span>
+                <img src="/Crux_Logo.png" alt="" className="h-full w-full scale-[1.6] object-contain" />
               </div>
               <span className="font-serif text-[17px] font-semibold text-paper">Crux</span>
             </div>
