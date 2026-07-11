@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "license": "MIT",
-  "description": "Crux \u2014 extracts structured claims, diagnoses why papers disagree, and generates the experiment that settles it.",
+  "description": "Crux — extracts structured claims, diagnoses why papers disagree, and generates the experiment that settles it.",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
@@ -40,6 +40,7 @@
     "electron": "^43.1.0",
     "electron-builder": "^26.15.3",
     "postcss": "^8.4.49",
+    "puppeteer-core": "^25.3.0",
     "tailwindcss": "^3.4.17",
     "tsx": "^4.23.0",
     "typescript": "^5.7.2"

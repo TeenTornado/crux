@@ -26,6 +26,30 @@ Load 2–3 papers, watch claims stream in, and the graph builds itself. Click a 
 
 ---
 
+## The agent loop — Local-First on Gemma 4 (Track 1)
+
+Crux is not a straight arrow from input to output. It runs a **sense → decide → act → check** loop with visible recovery and explicit human-handoff boundaries — and after reconciliation it **acts on its own**: the agent selects the highest-confidence genuine contradiction and auto-designs the falsification experiment, no click required (low-confidence pairs are deferred to *you* instead).
+
+![Agent acted on the NEXT queue](docs/screenshots/08-workspace-agent-acted.png)
+
+**Every step the agent takes is narrated live in the Ask tab** — finished steps check off with durations, the current step types itself out, the remaining queue shows as todos, and a run clock ticks. The Agent State panel above it derives GOAL / STATE / PROGRESS / CONFIDENCE (with a real trend arrow) / NEXT / **⚡ACTED** / HANDOFF from live store state — nothing scripted.
+
+| The narrated run + Agent State | Verdict & experiment, badged on-device |
+|---|---|
+| ![Agent run card](docs/screenshots/11-agent-run-card.png) | ![On-device verdict and POPPER plan](docs/screenshots/09-verdict-experiment-ondevice.png) |
+
+### Hard compute-mode selector — Local / Auto / Cloud
+
+Don't take the "on-device" claim on faith — **select it**. The header pill enforces the mode per-request across extraction, reconciliation, and experiments: **Local** locks everything to the Gemma at `127.0.0.1` (cloud escalation disabled, chat off — it's the one cloud tier and we don't fake boundaries), **Auto** is local-first with cloud fill-in, **Cloud** is hosted-first. Every verdict and plan carries an **engine badge** (`reconciled on-device · gemma4:e4b`) naming what actually produced it.
+
+![Compute mode selector](docs/screenshots/12-mode-selector.png)
+
+### The flagship live pair — Kaplan vs Chinchilla
+
+The repo ships a library of **famous contradictory paper pairs** (`sample-papers/`, one folder each, ranked by expected coverage). The flagship: OpenAI's 2020 scaling law (**N ∝ C^0.73**) vs DeepMind's Chinchilla correction (**a ≈ 0.50**). Drop both PDFs in: claims pair **by coefficient role in the equation** (not by dataset — they trained on different corpora), the exponents collide, and the agent designs the settling experiment — on a laptop, offline-capable. A deterministic **pattern miner** guarantees the headline coefficients even when the small model gets moody, and a verbatim **span-grounding gate** deletes any claim whose quote isn't literally in the source.
+
+---
+
 ## The 60-second pitch
 
 | | |
@@ -112,6 +136,15 @@ OLLAMA_GEMMA_MODEL=gemma3:latest
 `/api/extract` then runs extraction entirely on your machine — no paper text leaves the device — and the UI badge switches to **"Extracted on-device · Gemma 4."**
 
 ---
+
+### Desktop app (Electron)
+
+```bash
+npm run electron:dev      # window attached to the dev server
+npm run electron:build    # → dist-electron/Crux-<v>-arm64.dmg
+```
+
+The packaged app bundles its own Next standalone server (no system Node needed), ships **no API key**, and defaults to on-device Local mode; add a key later via `~/Library/Application Support/Crux/crux.env`.
 
 ## Architecture
 
