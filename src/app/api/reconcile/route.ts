@@ -21,14 +21,18 @@ function toAdjClaim(c: Claim): AdjClaim {
 }
 
 export async function POST(req: NextRequest) {
-  const { a, b } = (await req.json()) as { a: Claim; b: Claim };
+  const { a, b, mode } = (await req.json()) as {
+    a: Claim;
+    b: Claim;
+    mode?: "auto" | "local" | "cloud";
+  };
   if (!a || !b) {
     return NextResponse.json({ error: "Missing claims" }, { status: 400 });
   }
 
   try {
     // Phase 3: precision-first — deterministic guard + strict Likert adjudicator.
-    const adj = await adjudicate(toAdjClaim(a), toAdjClaim(b));
+    const adj = await adjudicate(toAdjClaim(a), toAdjClaim(b), { backend: mode });
     if (adj.engine === "none") {
       // No local model and no key — fall back to the offline heuristic.
       return NextResponse.json({ reconciliation: heuristicReconcile(a, b), engine: "heuristic" });

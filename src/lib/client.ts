@@ -11,12 +11,18 @@ import type {
 
 /** POST files (or demo flag) and stream NDJSON extraction events to `onEvent`. */
 export async function streamExtract(
-  opts: { files?: File[]; demo?: boolean; demoLive?: boolean },
+  opts: {
+    files?: File[];
+    demo?: boolean;
+    demoLive?: boolean;
+    mode?: "auto" | "local" | "cloud";
+  },
   onEvent: (ev: ExtractEvent) => void
 ): Promise<void> {
   const fd = new FormData();
   if (opts.demoLive) fd.set("demo", "live");
   else if (opts.demo) fd.set("demo", "1");
+  fd.set("mode", opts.mode || "auto");
   for (const f of opts.files || []) fd.append("files", f);
 
   const res = await fetch("/api/extract", { method: "POST", body: fd });
@@ -51,12 +57,13 @@ export async function streamExtract(
 
 export async function reconcile(
   a: Claim,
-  b: Claim
+  b: Claim,
+  mode: "auto" | "local" | "cloud" = "auto"
 ): Promise<{ reconciliation: Reconciliation; engine: string; thinking?: string | null }> {
   const res = await fetch("/api/reconcile", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ a, b }),
+    body: JSON.stringify({ a, b, mode }),
   });
   return res.json();
 }
@@ -65,12 +72,13 @@ export async function generateExperiment(
   a: Claim,
   b: Claim,
   reasoning: string,
-  edgeId: string
+  edgeId: string,
+  mode: "auto" | "local" | "cloud" = "auto"
 ): Promise<{ plan: ExperimentPlan; engine: string }> {
   const res = await fetch("/api/experiment", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ a, b, reasoning, edgeId }),
+    body: JSON.stringify({ a, b, reasoning, edgeId, mode }),
   });
   return res.json();
 }

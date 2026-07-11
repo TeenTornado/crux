@@ -63,7 +63,10 @@ async function streamDemo(
  * Falls back to the curated claims for any paper that yields nothing (quota),
  * so it never dead-ends, but prefers the real, grounded model output.
  */
-async function streamLiveDemo(controller: ReadableStreamDefaultController) {
+async function streamLiveDemo(
+  controller: ReadableStreamDefaultController,
+  mode: "auto" | "local" | "cloud" = "auto"
+) {
   const papers = DEMO_PAPERS;
   const allClaims: Claim[] = [];
   let tier: Claim["extractor"] = "gemma-hosted";
@@ -85,7 +88,14 @@ async function streamLiveDemo(controller: ReadableStreamDefaultController) {
       const { claims, tier: t } = await extractClaims(
         { title: p.title, paperId: p.paper_id, sections },
         {
-          backend: "auto",
+          backend: mode === "local" ? "ollama" : mode === "cloud" ? "hosted" : "auto",
+          escalate: mode !== "local", // hard-local: no cloud escalation, ever
+          // Demo bodies are 3 short sections/paper — the priority filter and
+          // env chunk budget are levers for 50-section arXiv papers and only
+          // starve THIS path (headings like "4. ImageNet-1k classification"
+          // don't match the priority regex). Feed everything.
+          sections: "all",
+          maxChunks: 8,
           onProgress: ({ done, total, heading }) =>
             line(controller, {
               type: "progress",
@@ -98,7 +108,11 @@ async function streamLiveDemo(controller: ReadableStreamDefaultController) {
         }
       );
       tier = t;
-      const list = claims.length
+      // Fall back to the curated claims unless the live output carries at
+      // least one VALUED claim — a single value-less sentence must not block
+      // the fallback (values are what edges pair on).
+      const hasValued = claims.some((c) => c.result_value);
+      const list = hasValued
         ? claims
         : DEMO_CLAIMS.filter((c) => c.paper_id === p.paper_id);
       for (const c of list) {
@@ -127,6 +141,7 @@ async function streamLiveDemo(controller: ReadableStreamDefaultController) {
 export async function POST(req: NextRequest) {
   const form = await req.formData().catch(() => null);
   const demoFlag = form?.get("demo");
+  const mode = (String(form?.get("mode") || "auto") as "auto" | "local" | "cloud");
   const wantsLiveDemo = demoFlag === "live";
   const wantsDemo = demoFlag === "1" || (!form && !wantsLiveDemo);
   const files = form ? (form.getAll("files") as File[]) : [];
@@ -135,8 +150,8 @@ export async function POST(req: NextRequest) {
     async start(controller) {
       try {
         // Live demo — real Gemma on the demo texts (authenticity path).
-        if (wantsLiveDemo && hasKey()) {
-          await streamLiveDemo(controller);
+        if (wantsLiveDemo && (hasKey() || mode === "local")) {
+          await streamLiveDemo(controller, mode);
           controller.close();
           return;
         }
@@ -204,7 +219,8 @@ export async function POST(req: NextRequest) {
             const { claims, tier: t, stats } = await extractClaims(
               { title: paper.title, paperId: paper.paper_id, sections },
               {
-                backend: "auto",
+                backend: mode === "local" ? "ollama" : mode === "cloud" ? "hosted" : "auto",
+                escalate: mode !== "local",
                 onProgress: ({ done, total, heading, ms }) =>
                   line(controller, {
                     type: "progress",

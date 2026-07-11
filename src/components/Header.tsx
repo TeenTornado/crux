@@ -17,7 +17,33 @@ import {
   MoreHorizontal,
   Trash2,
   ChevronDown,
+  Check,
 } from "lucide-react";
+import type { ComputeMode } from "@/lib/prefs";
+
+const MODE_META: Record<
+  ComputeMode,
+  { label: string; cls: string; dot: string; desc: string }
+> = {
+  local: {
+    label: "Local",
+    cls: "text-sage-soft",
+    dot: "bg-sage",
+    desc: "On-device only — Gemma via Ollama. No cloud model calls, chat disabled.",
+  },
+  auto: {
+    label: "Auto",
+    cls: "text-gold-soft",
+    dot: "bg-gold",
+    desc: "Local-first: Gemma on-device, cloud fills in when a step starves.",
+  },
+  cloud: {
+    label: "Cloud",
+    cls: "text-paper-dim",
+    dot: "bg-paper-faint",
+    desc: "Hosted Gemma + Gemini first — fastest verdicts, needs the API key.",
+  },
+};
 
 export function Header() {
   const router = useRouter();
@@ -35,9 +61,11 @@ export function Header() {
           className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-gold-dim/50 bg-gold/10 transition-colors hover:bg-gold/20"
           aria-label="Back to home"
         >
-          <span className="font-serif text-[16px] font-semibold text-gold-soft">
-            C
-          </span>
+          <img
+            src="/Crux_Logo.png"
+            alt=""
+            className="h-full w-full scale-[1.6] object-contain"
+          />
         </Link>
         <div className="min-w-0">
           <h1 className="font-serif text-[18px] font-semibold leading-none tracking-tight text-paper">
@@ -67,10 +95,13 @@ export function Header() {
   );
 }
 
-/** The three model tiers, collapsed into one pill with a click-popover. */
+/** Model stack + the HARD compute-mode selector (Local / Auto / Cloud). */
 function StackPill() {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
+  const mode = useStore((s) => s.computeMode);
+  const setMode = useStore((s) => s.setComputeMode);
+  const m = MODE_META[mode];
 
   useEffect(() => {
     if (!open) return;
@@ -86,10 +117,10 @@ function StackPill() {
       <button
         onClick={() => setOpen((v) => !v)}
         className="flex items-center gap-1.5 rounded-lg border border-ink-500 px-2.5 py-1.5 text-[11px] text-paper-dim transition-colors hover:border-gold-dim/60 hover:text-paper"
-        title="Model stack"
+        title="Model stack & compute mode"
       >
-        <Layers size={12} className="text-gold-soft" />
-        <span className="font-medium text-paper">Stack</span>
+        <span className={`h-1.5 w-1.5 rounded-full ${m.dot}`} />
+        <span className={`font-semibold ${m.cls}`}>{m.label}</span>
         <span className="hidden text-paper-faint md:inline">· Gemma 4 + Gemini</span>
         <ChevronDown
           size={11}
@@ -97,7 +128,36 @@ function StackPill() {
         />
       </button>
       {open && (
-        <div className="absolute right-0 top-9 z-50 w-64 overflow-hidden rounded-xl border border-ink-500 bg-ink-800 py-1 shadow-[0_20px_50px_-20px_rgba(0,0,0,0.7)]">
+        <div className="absolute right-0 top-9 z-50 w-72 overflow-hidden rounded-xl border border-ink-500 bg-ink-800 py-1 shadow-[0_20px_50px_-20px_rgba(0,0,0,0.7)]">
+          <div className="px-3 pb-1 pt-2 font-mono text-[9px] uppercase tracking-[0.18em] text-paper-faint">
+            Compute mode
+          </div>
+          {(Object.keys(MODE_META) as ComputeMode[]).map((k) => {
+            const mm = MODE_META[k];
+            const active = mode === k;
+            return (
+              <button
+                key={k}
+                onClick={() => setMode(k)}
+                className={`flex w-full items-start gap-2.5 px-3 py-2 text-left transition-colors hover:bg-ink-700 ${
+                  active ? "bg-ink-700/60" : ""
+                }`}
+              >
+                <span className={`mt-1 h-1.5 w-1.5 shrink-0 rounded-full ${mm.dot}`} />
+                <span className="min-w-0 flex-1">
+                  <span className={`text-[12px] font-semibold ${mm.cls}`}>{mm.label}</span>
+                  <span className="block text-[10.5px] leading-snug text-paper-faint">
+                    {mm.desc}
+                  </span>
+                </span>
+                {active && <Check size={13} className="mt-0.5 shrink-0 text-paper-dim" />}
+              </button>
+            );
+          })}
+          <div className="my-1 h-px bg-paper/10" />
+          <div className="px-3 pb-1 pt-1 font-mono text-[9px] uppercase tracking-[0.18em] text-paper-faint">
+            The stack
+          </div>
           <TierRow
             icon={<Cpu size={13} />}
             label="Gemma 4"
@@ -110,7 +170,7 @@ function StackPill() {
             sub="reconcile · experiment"
             tone="#C9A227"
           />
-          <TierRow icon={<Zap size={13} />} label="Flash" sub="chat" tone="#8FA6C1" />
+          <TierRow icon={<Zap size={13} />} label="Flash" sub="chat (cloud only)" tone="#8FA6C1" />
         </div>
       )}
     </div>
@@ -176,6 +236,10 @@ function OverflowMenu({
 
   const item =
     "flex w-full items-center gap-2 px-3 py-2 text-left text-[12px] text-paper-dim transition-colors hover:bg-ink-700 hover:text-paper";
+  const mode = useStore((s) => s.computeMode);
+  const setMode = useStore((s) => s.setComputeMode);
+  const nextMode: ComputeMode =
+    mode === "auto" ? "local" : mode === "local" ? "cloud" : "auto";
 
   return (
     <div ref={ref} className="relative">
@@ -193,6 +257,16 @@ function OverflowMenu({
       </button>
       {open && (
         <div className="absolute right-0 top-12 z-50 w-64 overflow-hidden rounded-xl border border-ink-500 bg-ink-800 py-1 shadow-[0_20px_50px_-20px_rgba(0,0,0,0.7)] sm:top-10">
+          <button
+            onClick={() => setMode(nextMode)}
+            className={item}
+            title="Cycle compute mode"
+          >
+            <span className={`h-1.5 w-1.5 rounded-full ${MODE_META[mode].dot}`} />
+            Mode: <span className={MODE_META[mode].cls}>{MODE_META[mode].label}</span>
+            <span className="ml-auto font-mono text-[9px] text-paper-faint">tap to cycle</span>
+          </button>
+          <div className="my-1 h-px bg-paper/10" />
           <button
             onClick={() => {
               setOpen(false);

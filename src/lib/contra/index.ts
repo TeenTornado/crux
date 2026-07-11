@@ -106,7 +106,7 @@ export interface AdjResult {
 export async function adjudicate(
   a: AdjClaim,
   b: AdjClaim,
-  opts: { threshold?: number } = {}
+  opts: { threshold?: number; backend?: "auto" | "local" | "cloud" } = {}
 ): Promise<AdjResult> {
   const threshold = opts.threshold ?? 8;
 
@@ -135,9 +135,12 @@ export async function adjudicate(
   // matched-condition contradictions); local Gemma is the offline fallback.
   // The deterministic guard + Likert threshold + low-confidence guard below keep
   // precision regardless of which model answers.
-  // Local Mode (RECONCILE_BACKEND=local): skip the cloud attempt entirely and
-  // adjudicate on-device — the WiFi-off path, no doomed Gemini call to wait on.
-  const localOnly = process.env.RECONCILE_BACKEND === "local";
+  // Backend selection: an explicit per-call mode (the UI's hard selector)
+  // beats the env default. "local" = on-device only, no cloud attempt;
+  // "cloud" = Gemini first even when the env says local; "auto"/unset = env.
+  const localOnly =
+    opts.backend === "local" ||
+    (opts.backend !== "cloud" && process.env.RECONCILE_BACKEND === "local");
   try {
     if (!localOnly && hasKey()) {
       raw = await geminiAdj(prompt);

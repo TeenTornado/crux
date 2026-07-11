@@ -69,18 +69,22 @@ function coerce(raw: any, edgeId: string): ExperimentPlan {
 }
 
 export async function POST(req: NextRequest) {
-  const { a, b, reasoning, edgeId } = (await req.json()) as {
+  const { a, b, reasoning, edgeId, mode } = (await req.json()) as {
     a: Claim;
     b: Claim;
     reasoning: string;
     edgeId: string;
+    mode?: "auto" | "local" | "cloud";
   };
   if (!a || !b) {
     return NextResponse.json({ error: "Missing claims" }, { status: 400 });
   }
 
   const prompt = experimentPrompt(a, b, reasoning || "");
-  const localOnly = process.env.RECONCILE_BACKEND === "local";
+  // Explicit UI mode beats the env default (same rule as the adjudicator).
+  const localOnly =
+    mode === "local" ||
+    (mode !== "cloud" && process.env.RECONCILE_BACKEND === "local");
 
   // Deterministic scaffold — the honest last resort, clearly labeled.
   const template = () =>

@@ -3,7 +3,12 @@
 // Lightweight UI prefs in localStorage (sidebar state, active tab).
 // Deliberately separate from the IndexedDB data layer.
 
+export type ComputeMode = "auto" | "local" | "cloud";
+
 export interface Prefs {
+  /** Hard model-routing selection: local = on-device only (no cloud model
+   *  calls), cloud = hosted models first, auto = local-first with fallback. */
+  computeMode: ComputeMode;
   sidebarCollapsed: boolean;
   /** Workspace sources (left) panel collapsed to a rail. */
   leftCollapsed: boolean;
@@ -14,6 +19,7 @@ export interface Prefs {
 const KEY = "crux:prefs";
 
 const DEFAULTS: Prefs = {
+  computeMode: "auto",
   sidebarCollapsed: false,
   leftCollapsed: false,
   activeTab: "context",
