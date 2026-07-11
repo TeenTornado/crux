@@ -1,6 +1,5 @@
 import { NextRequest } from "next/server";
 import { hasKey } from "@/lib/gemini";
-import { extractClaimsForPaper } from "@/lib/extractor";
 import { extractClaims, warmOllama } from "@/lib/extract";
 import { ingest, extractionInput, type StructuredDoc } from "@/lib/ingest";
 import { DEMO_PAPERS, DEMO_CLAIMS, DEMO_PAPER_BODIES } from "@/lib/demoData";
@@ -58,12 +57,16 @@ async function streamDemo(
 /**
  * LIVE demo: run REAL Gemma 4 extraction on the demo papers' actual text. This
  * is the authenticity path — a judge can watch the model genuinely produce the
- * claims. Falls back to the curated claim for any paper the API can't process
- * (quota), so it never dead-ends, but prefers the real model output.
+ * claims. Runs the GATED v2 cascade (span-grounding gate + expanded-boundary
+ * retry + deterministic miner), the same path real uploads take — the
+ * authenticity button must not bypass the safety mechanism it exists to prove.
+ * Falls back to the curated claims for any paper that yields nothing (quota),
+ * so it never dead-ends, but prefers the real, grounded model output.
  */
 async function streamLiveDemo(controller: ReadableStreamDefaultController) {
   const papers = DEMO_PAPERS;
   const allClaims: Claim[] = [];
+  let tier: Claim["extractor"] = "gemma-hosted";
   for (let i = 0; i < papers.length; i++) {
     const p = papers[i];
     if (i > 0) await sleep(1800); // respect per-minute quota
@@ -72,11 +75,29 @@ async function streamLiveDemo(controller: ReadableStreamDefaultController) {
       type: "status",
       message: `Gemma 4 extracting (live) · ${p.title}`,
     });
-    const body = (DEMO_PAPER_BODIES[p.paper_id] || [])
-      .map((b) => `${b.heading ? b.heading + "\n" : ""}${b.text}`)
-      .join("\n\n");
+    // DEMO_PAPER_BODIES are already {heading, text} sections — feed them to the
+    // section-aware cascade directly.
+    const sections = (DEMO_PAPER_BODIES[p.paper_id] || []).map((b) => ({
+      heading: b.heading || "",
+      text: b.text,
+    }));
     try {
-      const { claims } = await extractClaimsForPaper(p.title, body, p.paper_id);
+      const { claims, tier: t } = await extractClaims(
+        { title: p.title, paperId: p.paper_id, sections },
+        {
+          backend: "auto",
+          onProgress: ({ done, total, heading }) =>
+            line(controller, {
+              type: "progress",
+              done,
+              total,
+              heading,
+              paper_id: p.paper_id,
+            }),
+          onStatus: (message) => line(controller, { type: "status", message }),
+        }
+      );
+      tier = t;
       const list = claims.length
         ? claims
         : DEMO_CLAIMS.filter((c) => c.paper_id === p.paper_id);
@@ -94,8 +115,13 @@ async function streamLiveDemo(controller: ReadableStreamDefaultController) {
       }
     }
   }
-  // source "gemma-hosted" so reconciliation runs LIVE too (not the curated set).
-  line(controller, { type: "done", papers, claims: allClaims, source: "gemma-hosted" });
+  // Live tier as source so reconciliation runs LIVE too (not the curated set).
+  line(controller, {
+    type: "done",
+    papers,
+    claims: allClaims,
+    source: tier === "gemma-on-device" ? "gemma-on-device" : "gemma-hosted",
+  });
 }
 
 export async function POST(req: NextRequest) {
